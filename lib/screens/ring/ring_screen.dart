@@ -117,10 +117,10 @@ class _RingScreenState extends State<RingScreen> {
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(
-                      compact ? 8 : 14,
-                      2,
-                      compact ? 8 : 14,
-                      3,
+                      compact ? 7 : 12,
+                      1,
+                      compact ? 7 : 12,
+                      1,
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -200,7 +200,7 @@ class _RingScreenState extends State<RingScreen> {
           ),
           if (!veryCompact)
             Text(
-              compact ? 'LOCAL · REV 0.1.1' : 'LOCAL RING · REV 0.1.1',
+              compact ? 'LOCAL · REV 0.1.2' : 'LOCAL RING · REV 0.1.2',
               style: TextStyle(
                 color: AppTheme.textMuted,
                 fontWeight: FontWeight.w800,
@@ -253,57 +253,47 @@ class _RingScreenState extends State<RingScreen> {
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final h = constraints.maxHeight;
-        final w = constraints.maxWidth;
+        final buttonHeight = compact ? 42.0 : 52.0;
+        final buttonWidth = compact ? 62.0 : 76.0;
+        final gap = compact ? 4.0 : 7.0;
+        final fontSize = compact ? 18.0 : 22.0;
 
-        final titleHeight = compact ? 18.0 : 22.0;
-        final gap = (h * .018).clamp(3.0, 7.0);
-        final availableForButtons =
-            math.max(80.0, h - titleHeight - 6 - (gap * 3));
-
-        final buttonHeight =
-            (availableForButtons / 4).clamp(28.0, compact ? 48.0 : 58.0);
-        final buttonWidth =
-            (w * .72).clamp(48.0, compact ? 72.0 : 82.0);
-        final fontSize =
-            (buttonHeight * .40).clamp(15.0, compact ? 20.0 : 24.0);
-
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              height: titleHeight,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
+        return Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
                   '$title LANE',
                   style: TextStyle(
                     color: color,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 1.2,
+                    letterSpacing: 1.1,
                     fontSize: compact ? 12 : 14,
                   ),
                 ),
-              ),
+                SizedBox(height: compact ? 4 : 6),
+                for (var i = 0; i < 4; i++) ...[
+                  FaultButton(
+                    dogNumber: i + 1,
+                    laneColor: color,
+                    active: values[i],
+                    width: buttonWidth,
+                    height: buttonHeight,
+                    fontSize: fontSize,
+                    onTap: () => onTap(i),
+                  ),
+                  if (i != 3) SizedBox(height: gap),
+                ],
+              ],
             ),
-            const SizedBox(height: 4),
-            for (var i = 0; i < 4; i++) ...[
-              FaultButton(
-                dogNumber: i + 1,
-                laneColor: color,
-                active: values[i],
-                width: buttonWidth,
-                height: buttonHeight,
-                fontSize: fontSize,
-                onTap: () => onTap(i),
-              ),
-              if (i != 3) SizedBox(height: gap),
-            ],
-          ],
+          ),
         );
       },
     );
   }
+
 
   Widget _lightTower({
     required bool compact,
@@ -312,81 +302,70 @@ class _RingScreenState extends State<RingScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final h = constraints.maxHeight;
-        final w = constraints.maxWidth;
 
-        // Timer receives guaranteed space FIRST. Lights use what remains.
         final timerHeight =
-            (h * .19).clamp(34.0, compact ? 48.0 : 62.0);
-        final timerGap = compact ? 2.0 : 5.0;
+            (h * .18).clamp(30.0, compact ? 44.0 : 58.0);
+        final timerGap = compact ? 1.0 : 4.0;
+        final lampAreaHeight =
+            (h - timerHeight - timerGap).clamp(60.0, h);
+
+        final targetLampSize = compact ? 58.0 : 78.0;
+        final lampGap = compact ? 4.0 : 7.0;
         final towerPadding = compact ? 5.0 : 8.0;
-        final lampGap = (h * .014).clamp(2.0, 7.0);
-
-        final heightForLamps = math.max(
-          100.0,
-          h -
-              timerHeight -
-              timerGap -
-              (towerPadding * 2) -
-              (lampGap * 3),
-        );
-
-        final lampByHeight = heightForLamps / 4;
-        final lampByWidth = w * (compact ? .42 : .38);
-        final lampSize = math.min(
-          lampByHeight,
-          math.min(lampByWidth, compact ? 66.0 : 88.0),
-        ).clamp(26.0, 88.0);
 
         return Column(
           children: [
-            Expanded(
+            SizedBox(
+              height: lampAreaHeight,
+              width: double.infinity,
               child: Center(
-                child: Container(
-                  padding: EdgeInsets.all(towerPadding),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0E131B),
-                    borderRadius:
-                        BorderRadius.circular(compact ? 20 : 28),
-                    border: Border.all(
-                      color: AppTheme.border,
-                      width: compact ? 1.4 : 2,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Container(
+                    padding: EdgeInsets.all(towerPadding),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0E131B),
+                      borderRadius:
+                          BorderRadius.circular(compact ? 18 : 26),
+                      border: Border.all(
+                        color: AppTheme.border,
+                        width: compact ? 1.2 : 1.8,
+                      ),
                     ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      FlyballLamp(
-                        color: const Color(0xFFE54242),
-                        active: clock.phase == LightPhase.red1,
-                        size: lampSize,
-                      ),
-                      SizedBox(height: lampGap),
-                      FlyballLamp(
-                        color: const Color(0xFFE54242),
-                        active: clock.phase == LightPhase.red2,
-                        size: lampSize,
-                      ),
-                      SizedBox(height: lampGap),
-                      FlyballLamp(
-                        color: const Color(0xFFE54242),
-                        active: clock.phase == LightPhase.red3,
-                        size: lampSize,
-                      ),
-                      SizedBox(height: lampGap),
-                      FlyballLamp(
-                        color: AppTheme.green,
-                        active: clock.phase == LightPhase.green,
-                        size: lampSize,
-                      ),
-                    ],
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FlyballLamp(
+                          color: const Color(0xFFE54242),
+                          active: clock.phase == LightPhase.red1,
+                          size: targetLampSize,
+                        ),
+                        SizedBox(height: lampGap),
+                        FlyballLamp(
+                          color: const Color(0xFFE54242),
+                          active: clock.phase == LightPhase.red2,
+                          size: targetLampSize,
+                        ),
+                        SizedBox(height: lampGap),
+                        FlyballLamp(
+                          color: const Color(0xFFE54242),
+                          active: clock.phase == LightPhase.red3,
+                          size: targetLampSize,
+                        ),
+                        SizedBox(height: lampGap),
+                        FlyballLamp(
+                          color: AppTheme.green,
+                          active: clock.phase == LightPhase.green,
+                          size: targetLampSize,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
             SizedBox(height: timerGap),
-            SizedBox(
-              height: timerHeight,
-              width: double.infinity,
+            Expanded(
               child: Center(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
@@ -394,12 +373,12 @@ class _RingScreenState extends State<RingScreen> {
                     clock.display,
                     maxLines: 1,
                     style: TextStyle(
-                      fontSize: veryCompact ? 44 : compact ? 54 : 68,
+                      fontSize: veryCompact ? 42 : compact ? 52 : 66,
                       fontWeight: FontWeight.w900,
                       fontFeatures: const [
                         FontFeature.tabularFigures(),
                       ],
-                      letterSpacing: compact ? 1 : 2,
+                      letterSpacing: compact ? .8 : 1.8,
                       color: clock.state == RingClockState.stopped
                           ? AppTheme.gold
                           : Colors.white,
@@ -413,6 +392,7 @@ class _RingScreenState extends State<RingScreen> {
       },
     );
   }
+
 
   Widget _controls({
     required bool compact,

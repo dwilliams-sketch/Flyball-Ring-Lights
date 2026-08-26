@@ -1,0 +1,13 @@
+FLYBALL RING LIGHTS REV 0.1
+
+THIS IS A NEW APP. Do not upload it over the Menai Muttineers Academy repository.
+
+1. Create a new GitHub repo, suggested name: Flyball-Ring-Lights
+2. Extract this ZIP.
+3. Upload the CONTENTS to the new repo root.
+4. Commit: Initial Flyball Ring Lights Rev 0.1
+5. Open Actions and let Build Flyball Ring Lights run.
+6. Download the Flyball-Ring-Lights-Rev-0-1-APK artifact after the green tick.
+7. If using the web build, set GitHub Pages source to GitHub Actions.
+
+No Firebase secrets are needed in Rev 0.1.

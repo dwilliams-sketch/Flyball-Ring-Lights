@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "559694261262",
+    "project_id": "flyball-ring-lights",
+    "storage_bucket": "flyball-ring-lights.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:559694261262:android:6fe5515687aa64971aa05f",
+        "android_client_info": {
+          "package_name": "com.menaimuttineers.flyball_ring_lights"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_eGSVZp9VO1lbsQ0-b43bBbEivRdZ0Og"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

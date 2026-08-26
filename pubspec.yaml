@@ -1,7 +1,7 @@
 name: flyball_ring_lights
 description: Flyball Ring Lights by Menai Muttineers - Rev 0.1.1 responsive prototype
 publish_to: 'none'
-version: 0.1.2+3
+version: 0.2.0+4
 
 environment:
   sdk: '>=3.10.0 <4.0.0'
@@ -13,6 +13,12 @@ dependencies:
   shared_preferences: ^2.5.3
   audioplayers: ^6.5.1
   wakelock_plus: ^1.3.2
+  firebase_core: 4.12.1
+  firebase_core_platform_interface: 8.0.0
+  firebase_core_web: 3.9.1
+  firebase_auth: 6.5.6
+  firebase_auth_platform_interface: 9.0.5
+  firebase_auth_web: 6.2.5
 
 dev_dependencies:
   flutter_test:

@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'onboarding/create_account_screen.dart';
 import 'onboarding/sign_in_screen.dart';
+import 'live/join_live_ring_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -115,9 +116,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 14),
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const JoinLiveRingScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.wifi_tethering_rounded),
+                    label: const Text('JOIN A LIVE RING AS A GUEST'),
+                  ),
                   const SizedBox(height: 22),
                   const Text(
-                    'REV 0.3.2.1 · ACCOUNT FIX',
+                    'REV 0.5 · LIVE RING BETA',
                     style: TextStyle(
                       color: Colors.white30,
                       letterSpacing: 1.2,

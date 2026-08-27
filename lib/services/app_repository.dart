@@ -193,16 +193,28 @@ class AppRepository {
     await auth.sendPasswordResetEmail(email: email.trim());
   }
 
-  Stream<List<DogRecord>> dogs(String clubId) {
+  Stream<List<DogRecord>> dogs(
+    String clubId, {
+    bool includeRetired = false,
+    bool retiredOnly = false,
+  }) {
     return db
         .collection('clubs')
         .doc(clubId)
         .collection('dogs')
         .orderBy('name')
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => DogRecord.fromMap(d.id, d.data()))
-            .toList());
+        .map((snap) {
+          final all = snap.docs
+              .map((d) => DogRecord.fromMap(d.id, d.data()))
+              .toList();
+
+          if (retiredOnly) {
+            return all.where((dog) => dog.isRetired).toList();
+          }
+          if (includeRetired) return all;
+          return all.where((dog) => !dog.isRetired).toList();
+        });
   }
 
   Future<void> saveDog(String clubId, DogRecord dog) async {
@@ -212,13 +224,129 @@ class AppRepository {
 
     await ref.set({
       ...dog.toMap(),
+      if (dog.id.isEmpty) 'status': 'active',
       'updatedAt': FieldValue.serverTimestamp(),
       if (dog.id.isEmpty) 'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
-  Future<void> deleteDog(String clubId, String dogId) async {
-    await db.collection('clubs').doc(clubId).collection('dogs').doc(dogId).delete();
+  Future<void> retireDog(
+    String clubId,
+    String dogId, {
+    String reason = '',
+  }) async {
+    await db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('dogs')
+        .doc(dogId)
+        .set({
+      'status': 'retired',
+      'retiredReason': reason.trim(),
+      'retiredAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> restoreDog(String clubId, String dogId) async {
+    await db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('dogs')
+        .doc(dogId)
+        .set({
+      'status': 'active',
+      'retiredReason': FieldValue.delete(),
+      'retiredAt': FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> deleteDogPermanently(
+    String clubId,
+    String dogId,
+  ) async {
+    final dogRef = db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('dogs')
+        .doc(dogId);
+
+    final runs = await dogRef.collection('runs').limit(1).get();
+    if (runs.docs.isNotEmpty) {
+      throw StateError(
+        'This dog has recorded history. Retire the dog instead so its old '
+        'competition records are kept.',
+      );
+    }
+
+    await dogRef.delete();
+  }
+
+  Future<int> importMenaiDogs(String clubId) async {
+    final dogsRef =
+        db.collection('clubs').doc(clubId).collection('dogs');
+    final existing = await dogsRef.get();
+
+    final byName = <String, DocumentReference<Map<String, dynamic>>>{};
+    for (final doc in existing.docs) {
+      final key =
+          (doc.data()['name'] ?? '').toString().trim().toLowerCase();
+      if (key.isNotEmpty) byName[key] = doc.reference;
+    }
+
+    const menaiDogs = <Map<String, String>>[
+      {'name': 'Macs', 'bfaNumber': '13654A', 'breed': 'Huntaway', 'jumpHeight': 'FH'},
+      {'name': 'Milo', 'bfaNumber': '13649A', 'breed': 'Golden Retriever', 'jumpHeight': 'FH'},
+      {'name': 'Arlo', 'bfaNumber': '13650A', 'breed': 'Cross', 'jumpHeight': 'FH'},
+      {'name': 'Nellie', 'bfaNumber': '13462A', 'breed': 'Collie', 'jumpHeight': 'FH'},
+      {'name': 'Chip', 'bfaNumber': '11689A', 'breed': 'Labrador Retriever', 'jumpHeight': 'FH'},
+      {'name': 'Izzie', 'bfaNumber': '11697B', 'breed': 'Cross', 'jumpHeight': 'FH'},
+      {'name': 'Coco', 'bfaNumber': '13017A', 'breed': 'Cross', 'jumpHeight': '6'},
+      {'name': 'Rizzo', 'bfaNumber': '13196A', 'breed': 'Labrador Retriever', 'jumpHeight': 'FH'},
+      {'name': 'Cheddar', 'bfaNumber': '13196B', 'breed': 'Labrador Retriever', 'jumpHeight': 'FH'},
+      {'name': 'Olaf', 'bfaNumber': '13192A', 'breed': 'Cross', 'jumpHeight': '6'},
+      {'name': 'Snow', 'bfaNumber': '13193A', 'breed': 'Jack Russell Terrier', 'jumpHeight': '6'},
+      {'name': 'Maggie', 'bfaNumber': '13286A', 'breed': 'Labrador Retriever', 'jumpHeight': 'FH'},
+      {'name': 'Callie', 'bfaNumber': '13286B', 'breed': 'Cocker Spaniel', 'jumpHeight': '6'},
+      {'name': 'Skylar', 'bfaNumber': '11917A', 'breed': 'Border Collie/WSD', 'jumpHeight': 'FH'},
+      {'name': 'Star', 'bfaNumber': '11697C', 'breed': 'German Shepherd Dog', 'jumpHeight': 'FH'},
+      {'name': 'Ember', 'bfaNumber': '11917B', 'breed': 'Border Collie/WSD', 'jumpHeight': 'FH'},
+    ];
+
+    final batch = db.batch();
+    var created = 0;
+
+    for (final dog in menaiDogs) {
+      final key = dog['name']!.toLowerCase();
+      final existingRef = byName[key];
+
+      if (existingRef != null) {
+        batch.set(existingRef, {
+          'bfaNumber': dog['bfaNumber'],
+          'breed': dog['breed'],
+          'jumpHeight': dog['jumpHeight'],
+          'status': 'active',
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } else {
+        final ref = dogsRef.doc();
+        batch.set(ref, {
+          ...dog,
+          'ukflNumber': '',
+          'startDistance': '',
+          'releaseCue': '',
+          'notes': '',
+          'status': 'active',
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        created++;
+      }
+    }
+
+    await batch.commit();
+    return created;
   }
 
   Future<Map<String, dynamic>?> clubInfo(String clubId) async {
@@ -239,6 +367,85 @@ class AppRepository {
         .orderBy('recordedAt', descending: true)
         .limit(100)
         .snapshots();
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> competitionDays(
+    String clubId,
+  ) {
+    return db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('competitionDays')
+        .orderBy('date', descending: true)
+        .snapshots();
+  }
+
+  Future<String> createCompetitionDay({
+    required String clubId,
+    required String name,
+    required String venue,
+    required DateTime date,
+    required String organisation,
+    required String teamName,
+    required String division,
+    required String seedTime,
+    required String notes,
+  }) async {
+    final ref = db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('competitionDays')
+        .doc();
+
+    await ref.set({
+      'name': name.trim(),
+      'venue': venue.trim(),
+      'date': Timestamp.fromDate(
+        DateTime(date.year, date.month, date.day),
+      ),
+      'organisation': organisation,
+      'teamName': teamName.trim(),
+      'division': division.trim(),
+      'seedTime': _numberOrNull(seedTime),
+      'notes': notes.trim(),
+      'status': 'active',
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    return ref.id;
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> competitionRaces(
+    String clubId,
+    String competitionId,
+  ) {
+    return db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('competitionSessions')
+        .where('competitionId', isEqualTo: competitionId)
+        .snapshots();
+  }
+
+  Future<void> finishCompetitionDay(
+    String clubId,
+    String competitionId, {
+    String finalPlacing = '',
+    String dayNotes = '',
+  }) async {
+    await db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('competitionDays')
+        .doc(competitionId)
+        .set({
+      'status': 'finished',
+      'finalPlacing': finalPlacing.trim(),
+      'dayNotes': dayNotes.trim(),
+      'finishedAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> competitionSessions(
@@ -270,6 +477,10 @@ class AppRepository {
   Future<String> createCompetitionSession({
     required String clubId,
     required String lane,
+    String competitionId = '',
+    String competitionName = '',
+    int raceNumber = 0,
+    String opponent = '',
   }) async {
     final ref = db
         .collection('clubs')
@@ -279,11 +490,17 @@ class AppRepository {
 
     await ref.set({
       'lane': lane,
+      'competitionId': competitionId,
+      'competitionName': competitionName,
+      'raceNumber': raceNumber,
+      'opponent': opponent.trim(),
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
       'legs': 0,
       'status': 'active',
+      'raceResult': 'In progress',
     });
+
     return ref.id;
   }
 
@@ -368,16 +585,89 @@ class AppRepository {
     String clubId,
     String sessionId,
   ) async {
-    await db
+    final sessionRef = db
         .collection('clubs')
         .doc(clubId)
         .collection('competitionSessions')
-        .doc(sessionId)
-        .set({
+        .doc(sessionId);
+
+    final legs = await sessionRef.collection('legs').get();
+
+    var wins = 0;
+    var losses = 0;
+    var draws = 0;
+    var cleanLegs = 0;
+    var faults = 0;
+    var reruns = 0;
+    double? fastestTeamTime;
+
+    for (final leg in legs.docs) {
+      final data = leg.data();
+      final result = (data['result'] ?? '').toString();
+
+      if (result == 'Win') wins++;
+      if (result == 'Loss') losses++;
+      if (result == 'Draw') draws++;
+
+      final teamTime = data['teamTime'];
+      if (teamTime is num) {
+        final value = teamTime.toDouble();
+        if (fastestTeamTime == null || value < fastestTeamTime!) {
+          fastestTeamTime = value;
+        }
+      }
+
+      var legFaulted = false;
+      final entries = data['entries'];
+      if (entries is List) {
+        for (final raw in entries) {
+          if (raw is! Map) continue;
+          if (raw['fault'] == true) {
+            faults++;
+            legFaulted = true;
+          }
+          if (raw['isRerun'] == true) reruns++;
+        }
+      }
+      if (!legFaulted) cleanLegs++;
+    }
+
+    final raceResult = wins > losses
+        ? 'Win'
+        : losses > wins
+            ? 'Loss'
+            : wins == 0 && losses == 0 && draws == 0
+                ? 'Not recorded'
+                : 'Draw';
+
+    final current = await sessionRef.get();
+    final competitionId =
+        (current.data()?['competitionId'] ?? '').toString();
+
+    await sessionRef.set({
       'status': 'finished',
+      'raceResult': raceResult,
+      'legWins': wins,
+      'legLosses': losses,
+      'legDraws': draws,
+      'cleanLegs': cleanLegs,
+      'faults': faults,
+      'reruns': reruns,
+      'fastestTeamTime': fastestTeamTime,
       'finishedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    if (competitionId.isNotEmpty) {
+      await db
+          .collection('clubs')
+          .doc(clubId)
+          .collection('competitionDays')
+          .doc(competitionId)
+          .set({
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
   }
 
   static double? _numberOrNull(String text) {

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -37,10 +38,12 @@ class _RingScreenState extends State<RingScreen> {
   }
 
   Future<void> _enter() async {
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    if (!kIsWeb) {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
     await WakelockPlus.enable();
   }
 
@@ -77,10 +80,12 @@ class _RingScreenState extends State<RingScreen> {
     clock.dispose();
     audio.dispose();
     WakelockPlus.disable();
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
+    if (!kIsWeb) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    }
     super.dispose();
   }
 
@@ -200,7 +205,7 @@ class _RingScreenState extends State<RingScreen> {
           ),
           if (!veryCompact)
             Text(
-              compact ? 'LOCAL · REV 0.3.2' : 'LOCAL RING · REV 0.3.2',
+              compact ? 'LOCAL · REV 0.4' : 'LOCAL RING · REV 0.4',
               style: TextStyle(
                 color: AppTheme.textMuted,
                 fontWeight: FontWeight.w800,

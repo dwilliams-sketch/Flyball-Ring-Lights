@@ -9,24 +9,22 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  if (!kIsWeb) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+  }
 
   Object? firebaseError;
 
-  // Rev 0.2A connects Android first. Web remains the local prototype until
-  // a separate Firebase Web app is registered later.
-  if (!kIsWeb) {
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      ).timeout(
-        const Duration(seconds: 20),
-      );
-    } catch (error) {
-      firebaseError = error;
-    }
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    ).timeout(
+      const Duration(seconds: 20),
+    );
+  } catch (error) {
+    firebaseError = error;
   }
 
   runApp(RingLightsApp(firebaseError: firebaseError));

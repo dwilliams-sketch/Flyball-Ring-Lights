@@ -5,9 +5,11 @@ import '../services/app_repository.dart';
 import '../theme/app_theme.dart';
 import 'club/club_screen.dart';
 import 'competition/competition_setup_screen.dart';
+import 'competition/competition_days_screen.dart';
 import 'competition/history_screen.dart';
 import 'dogs/dogs_screen.dart';
 import 'ring/ring_screen.dart';
+import 'live/live_ring_lobby_screen.dart';
 import 'welcome_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -53,27 +55,47 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           _BigAction(
-            icon: Icons.traffic_rounded,
-            title: 'START TRAINING RING',
-            subtitle: 'Lights, timer, sounds and lane faults',
+            icon: Icons.wifi_tethering_rounded,
+            title: 'START LIVE RING',
+            subtitle: 'Blue, Red, Display and Viewers on multiple devices',
             color: AppTheme.gold,
             darkText: true,
             onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => LiveRingLobbyScreen(profile: profile),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const RingScreen()),
             ),
+            icon: const Icon(Icons.phone_android),
+            label: const Text('LOCAL / OFFLINE TRAINING RING'),
           ),
           const SizedBox(height: 12),
           _BigAction(
             icon: Icons.emoji_events_outlined,
-            title: 'COMPETITION MODE',
-            subtitle: 'Record line-up, times, faults, reruns and crossovers',
+            title: 'COMPETITION DAY',
+            subtitle: 'Group races and legs into one event',
             color: AppTheme.green,
             darkText: true,
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
+                builder: (_) => CompetitionDaysScreen(profile: profile),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
                 builder: (_) => CompetitionSetupScreen(profile: profile),
               ),
             ),
+            icon: const Icon(Icons.flash_on_outlined),
+            label: const Text('QUICK STANDALONE RACE'),
           ),
           const SizedBox(height: 18),
           _Tile(
@@ -86,10 +108,12 @@ class HomeScreen extends StatelessWidget {
           ),
           _Tile(
             icon: Icons.history,
-            title: 'Competition history',
-            subtitle: 'Saved competition sessions and legs',
+            title: 'All race history',
+            subtitle: 'Every saved race and leg',
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => HistoryScreen(profile: profile)),
+              MaterialPageRoute(
+                builder: (_) => HistoryScreen(profile: profile),
+              ),
             ),
           ),
           _Tile(
@@ -105,9 +129,9 @@ class HomeScreen extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'REV 0.3 COMPETITION BETA\n\n'
-                'The live multi-device ring comes next. This build focuses on '
-                'real accounts, clubs, dogs and competition records.',
+                'REV 0.5 LIVE MULTI-DEVICE BETA\n\n'
+                'Live Ring is now ready for multi-device beta testing alongside '
+                'the existing dogs, competitions and records.',
                 style: TextStyle(color: AppTheme.textMuted, height: 1.4),
               ),
             ),

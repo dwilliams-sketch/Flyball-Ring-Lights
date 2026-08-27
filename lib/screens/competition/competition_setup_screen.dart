@@ -8,7 +8,17 @@ import 'competition_leg_screen.dart';
 
 class CompetitionSetupScreen extends StatefulWidget {
   final AppProfile profile;
-  const CompetitionSetupScreen({super.key, required this.profile});
+  final String competitionId;
+  final String competitionName;
+  final int raceNumber;
+
+  const CompetitionSetupScreen({
+    super.key,
+    required this.profile,
+    this.competitionId = '',
+    this.competitionName = '',
+    this.raceNumber = 0,
+  });
 
   @override
   State<CompetitionSetupScreen> createState() => _CompetitionSetupScreenState();
@@ -17,7 +27,14 @@ class CompetitionSetupScreen extends StatefulWidget {
 class _CompetitionSetupScreenState extends State<CompetitionSetupScreen> {
   String lane = 'Blue';
   final selected = <String?>[null, null, null, null];
+  final opponent = TextEditingController();
   bool starting = false;
+
+  @override
+  void dispose() {
+    opponent.dispose();
+    super.dispose();
+  }
 
   Future<void> _start(List<DogRecord> dogs) async {
     if (selected.any((id) => id == null)) {
@@ -37,6 +54,10 @@ class _CompetitionSetupScreenState extends State<CompetitionSetupScreen> {
       final sessionId = await AppRepository().createCompetitionSession(
         clubId: widget.profile.clubId,
         lane: lane,
+        competitionId: widget.competitionId,
+        competitionName: widget.competitionName,
+        raceNumber: widget.raceNumber,
+        opponent: opponent.text,
       );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -94,7 +115,18 @@ class _CompetitionSetupScreenState extends State<CompetitionSetupScreen> {
               selected: {lane},
               onSelectionChanged: (v) => setState(() => lane = v.first),
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: opponent,
+              decoration: InputDecoration(
+                labelText: widget.competitionId.isEmpty
+                    ? 'Opponent / race note (optional)'
+                    : 'Opponent',
+                hintText: 'e.g. Storm Chasers',
+                prefixIcon: const Icon(Icons.groups_outlined),
+              ),
+            ),
+            const SizedBox(height: 18),
             for (var i = 0; i < 4; i++) ...[
               DropdownButtonFormField<String>(
                 value: selected[i],

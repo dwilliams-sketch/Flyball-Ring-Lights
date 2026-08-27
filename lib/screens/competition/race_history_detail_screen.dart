@@ -83,8 +83,12 @@ class RaceHistoryDetailScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              '${legs.length} saved leg${legs.length == 1 ? '' : 's'}'
-                              '${status.isEmpty ? '' : ' · $status'}',
+                              [
+                                '${legs.length} saved leg${legs.length == 1 ? '' : 's'}',
+                                if ((sessionData['opponent'] ?? '').toString().isNotEmpty)
+                                  'v ${sessionData['opponent']}',
+                                if (status.isNotEmpty) status,
+                              ].join(' · '),
                               style: const TextStyle(
                                 color: AppTheme.textMuted,
                               ),

@@ -3,11 +3,20 @@ import 'package:flutter/foundation.dart';
 
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
-    if (kIsWeb) {
-      throw UnsupportedError('Firebase Web is not configured yet in Rev 0.2B.');
-    }
+    if (kIsWeb) return web;
     return android;
   }
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyBonBc4uDH5tkLNtkp3xUYVDBphIQ3dLlA',
+    authDomain: 'flyball-ring-lights.firebaseapp.com',
+    databaseURL:
+        'https://flyball-ring-lights-default-rtdb.europe-west1.firebasedatabase.app',
+    projectId: 'flyball-ring-lights',
+    storageBucket: 'flyball-ring-lights.firebasestorage.app',
+    messagingSenderId: '559694261262',
+    appId: '1:559694261262:web:7ffafa626f5586251aa05f',
+  );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyB_eGSVZp9VO1lbsQ0-b43bBbEivRdZ0Og',
@@ -15,5 +24,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '559694261262',
     projectId: 'flyball-ring-lights',
     storageBucket: 'flyball-ring-lights.firebasestorage.app',
+    databaseURL:
+        'https://flyball-ring-lights-default-rtdb.europe-west1.firebasedatabase.app',
   );
 }

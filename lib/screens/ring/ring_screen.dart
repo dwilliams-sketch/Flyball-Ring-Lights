@@ -200,7 +200,7 @@ class _RingScreenState extends State<RingScreen> {
           ),
           if (!veryCompact)
             Text(
-              compact ? 'LOCAL · REV 0.3.1' : 'LOCAL RING · REV 0.3.1',
+              compact ? 'LOCAL · REV 0.3.2' : 'LOCAL RING · REV 0.3.2',
               style: TextStyle(
                 color: AppTheme.textMuted,
                 fontWeight: FontWeight.w800,

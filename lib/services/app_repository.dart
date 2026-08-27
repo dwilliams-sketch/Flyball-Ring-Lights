@@ -253,6 +253,20 @@ class AppRepository {
         .snapshots();
   }
 
+  Stream<QuerySnapshot<Map<String, dynamic>>> competitionLegs(
+    String clubId,
+    String sessionId,
+  ) {
+    return db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('competitionSessions')
+        .doc(sessionId)
+        .collection('legs')
+        .orderBy('legNumber')
+        .snapshots();
+  }
+
   Future<String> createCompetitionSession({
     required String clubId,
     required String lane,

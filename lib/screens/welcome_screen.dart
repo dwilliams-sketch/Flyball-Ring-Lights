@@ -117,7 +117,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ),
                   const SizedBox(height: 22),
                   const Text(
-                    'REV 0.3.1.1 · ACCOUNT FIX',
+                    'REV 0.3.2.1 · ACCOUNT FIX',
                     style: TextStyle(
                       color: Colors.white30,
                       letterSpacing: 1.2,

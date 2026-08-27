@@ -101,13 +101,13 @@ jobs:
       - name: Friendly APK name
         run: |
           cp build/app/outputs/flutter-apk/app-debug.apk \
-             build/app/outputs/flutter-apk/Flyball-Ring-Lights-Rev-0.4.apk
+             build/app/outputs/flutter-apk/Flyball-Ring-Lights-Rev-0.5-Live-Ring.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Flyball-Ring-Lights-Rev-0-4-APK
-          path: build/app/outputs/flutter-apk/Flyball-Ring-Lights-Rev-0.4.apk
+          name: Flyball-Ring-Lights-Rev-0-5-Live-Ring-APK
+          path: build/app/outputs/flutter-apk/Flyball-Ring-Lights-Rev-0.5-Live-Ring.apk
           if-no-files-found: error
           retention-days: 7
 
@@ -117,7 +117,7 @@ jobs:
       - name: Upload Web Build
         uses: actions/upload-artifact@v4
         with:
-          name: Flyball-Ring-Lights-Rev-0-4-Web
+          name: Flyball-Ring-Lights-Rev-0-5-Live-Ring-Web
           path: build/web
           if-no-files-found: error
           retention-days: 7

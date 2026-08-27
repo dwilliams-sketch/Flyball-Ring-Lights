@@ -34,47 +34,72 @@ class AppRepository {
     required String password,
     required String clubName,
   }) async {
-    final cred = await auth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    final uid = cred.user!.uid;
-    await cred.user!.updateDisplayName(displayName.trim());
+    User? createdUser;
+    DocumentReference<Map<String, dynamic>>? clubRef;
 
-    final clubRef = db.collection('clubs').doc();
-    final inviteCode = _inviteCode(clubName);
+    try {
+      final cred = await auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      createdUser = cred.user;
+      final uid = createdUser!.uid;
+      await createdUser.updateDisplayName(displayName.trim());
 
-    final batch = db.batch();
-    batch.set(clubRef, {
-      'name': clubName.trim(),
-      'ownerUid': uid,
-      'inviteCode': inviteCode,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    batch.set(db.collection('users').doc(uid), {
-      'displayName': displayName.trim(),
-      'email': email.trim().toLowerCase(),
-      'clubId': clubRef.id,
-      'clubName': clubName.trim(),
-      'role': 'owner',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    batch.set(clubRef.collection('members').doc(uid), {
-      'displayName': displayName.trim(),
-      'email': email.trim().toLowerCase(),
-      'role': 'owner',
-      'joinedAt': FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
+      clubRef = db.collection('clubs').doc();
+      final inviteCode = _inviteCode(clubName);
 
-    return AppProfile(
-      uid: uid,
-      displayName: displayName.trim(),
-      email: email.trim().toLowerCase(),
-      clubId: clubRef.id,
-      clubName: clubName.trim(),
-      role: 'owner',
-    );
+      // Deliberately write these in a safe order rather than one batch.
+      // This means later Firestore rules can see the documents that already exist.
+      await clubRef.set({
+        'name': clubName.trim(),
+        'ownerUid': uid,
+        'inviteCode': inviteCode,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await db.collection('users').doc(uid).set({
+        'displayName': displayName.trim(),
+        'email': email.trim().toLowerCase(),
+        'clubId': clubRef.id,
+        'clubName': clubName.trim(),
+        'role': 'owner',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await db.collection('clubInvites').doc(inviteCode).set({
+        'clubId': clubRef.id,
+        'clubName': clubName.trim(),
+        'createdBy': uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await clubRef.collection('members').doc(uid).set({
+        'displayName': displayName.trim(),
+        'email': email.trim().toLowerCase(),
+        'role': 'owner',
+        'joinedAt': FieldValue.serverTimestamp(),
+      });
+
+      return AppProfile(
+        uid: uid,
+        displayName: displayName.trim(),
+        email: email.trim().toLowerCase(),
+        clubId: clubRef.id,
+        clubName: clubName.trim(),
+        role: 'owner',
+      );
+    } catch (e) {
+      // Avoid leaving another half-created account during beta setup.
+      try {
+        if (clubRef != null) await clubRef.delete();
+      } catch (_) {}
+      try {
+        final u = createdUser ?? auth.currentUser;
+        if (u != null) await u.delete();
+      } catch (_) {}
+      rethrow;
+    }
   }
 
   Future<AppProfile> joinClubAccount({
@@ -83,54 +108,76 @@ class AppRepository {
     required String password,
     required String inviteCode,
   }) async {
-    final query = await db
-        .collection('clubs')
-        .where('inviteCode', isEqualTo: inviteCode.trim().toUpperCase())
-        .limit(1)
-        .get();
+    User? createdUser;
 
-    if (query.docs.isEmpty) {
-      throw FirebaseException(
-        plugin: 'cloud_firestore',
-        message: 'That club invite code was not found.',
+    try {
+      // Create the Firebase identity first so Firestore can securely validate
+      // the invite lookup. A bad code is cleaned up immediately.
+      final cred = await auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
       );
+      createdUser = cred.user;
+      final uid = createdUser!.uid;
+      await createdUser.updateDisplayName(displayName.trim());
+
+      final code = inviteCode.trim().toUpperCase();
+      final inviteSnap = await db.collection('clubInvites').doc(code).get();
+      final inviteData = inviteSnap.data();
+
+      if (inviteData == null) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          message: 'That club invite code was not found.',
+        );
+      }
+
+      final clubId = (inviteData['clubId'] ?? '').toString();
+      final clubName = (inviteData['clubName'] ?? '').toString();
+
+      if (clubId.isEmpty) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          message: 'That club invite is incomplete.',
+        );
+      }
+
+      await db.collection('users').doc(uid).set({
+        'displayName': displayName.trim(),
+        'email': email.trim().toLowerCase(),
+        'clubId': clubId,
+        'clubName': clubName,
+        'role': 'member',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      await db
+          .collection('clubs')
+          .doc(clubId)
+          .collection('members')
+          .doc(uid)
+          .set({
+        'displayName': displayName.trim(),
+        'email': email.trim().toLowerCase(),
+        'role': 'member',
+        'joinedAt': FieldValue.serverTimestamp(),
+      });
+
+      return AppProfile(
+        uid: uid,
+        displayName: displayName.trim(),
+        email: email.trim().toLowerCase(),
+        clubId: clubId,
+        clubName: clubName,
+        role: 'member',
+      );
+    } catch (e) {
+      try {
+        final u = createdUser ?? auth.currentUser;
+        if (u != null) await u.delete();
+      } catch (_) {}
+      rethrow;
     }
-
-    final clubDoc = query.docs.first;
-    final clubName = (clubDoc.data()['name'] ?? '').toString();
-
-    final cred = await auth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-    final uid = cred.user!.uid;
-    await cred.user!.updateDisplayName(displayName.trim());
-
-    final batch = db.batch();
-    batch.set(db.collection('users').doc(uid), {
-      'displayName': displayName.trim(),
-      'email': email.trim().toLowerCase(),
-      'clubId': clubDoc.id,
-      'clubName': clubName,
-      'role': 'member',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    batch.set(clubDoc.reference.collection('members').doc(uid), {
-      'displayName': displayName.trim(),
-      'email': email.trim().toLowerCase(),
-      'role': 'member',
-      'joinedAt': FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
-
-    return AppProfile(
-      uid: uid,
-      displayName: displayName.trim(),
-      email: email.trim().toLowerCase(),
-      clubId: clubDoc.id,
-      clubName: clubName,
-      role: 'member',
-    );
   }
 
   Future<void> signIn(String email, String password) async {
@@ -141,6 +188,10 @@ class AppRepository {
   }
 
   Future<void> signOut() => auth.signOut();
+
+  Future<void> sendPasswordReset(String email) async {
+    await auth.sendPasswordResetEmail(email: email.trim());
+  }
 
   Stream<List<DogRecord>> dogs(String clubId) {
     return db

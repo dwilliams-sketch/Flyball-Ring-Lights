@@ -7,18 +7,46 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function myUser() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    function userExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function myClubId() {
-      return myUser().data.clubId;
+      return get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data.clubId;
+    }
+
+    function isClubMember(clubId) {
+      return userExists() && myClubId() == clubId;
+    }
+
+    function isClubOwner(clubId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/clubs/$(clubId))
+        && get(
+          /databases/$(database)/documents/clubs/$(clubId)
+        ).data.ownerUid == request.auth.uid;
     }
 
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid;
       allow read, update: if signedIn() && request.auth.uid == uid;
       allow delete: if false;
+    }
+
+    // Invite code documents are only available by exact document lookup.
+    // Signed-in users cannot list all invite codes.
+    match /clubInvites/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update, delete: if signedIn()
+        && resource.data.createdBy == request.auth.uid;
     }
 
     match /clubs/{clubId} {
@@ -28,17 +56,25 @@ service cloud.firestore {
       allow read: if signedIn()
         && (
           resource.data.ownerUid == request.auth.uid
-          || myClubId() == clubId
+          || isClubMember(clubId)
         );
 
-      allow update: if signedIn()
-        && myClubId() == clubId;
+      allow update: if isClubMember(clubId);
+      allow delete: if isClubOwner(clubId);
 
-      allow delete: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+      match /members/{uid} {
+        allow read: if isClubMember(clubId) || isClubOwner(clubId);
+
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && isClubMember(clubId);
+
+        allow update: if isClubMember(clubId);
+        allow delete: if isClubOwner(clubId);
+      }
 
       match /{document=**} {
-        allow read, write: if signedIn() && myClubId() == clubId;
+        allow read, write: if isClubMember(clubId) || isClubOwner(clubId);
       }
     }
   }

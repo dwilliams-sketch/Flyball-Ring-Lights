@@ -48,6 +48,8 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
   bool leaving = false;
   int autoStoppedGeneration = -1;
 
+  final Map<String, bool> optimisticFaults = {};
+
   @override
   void initState() {
     super.initState();
@@ -184,10 +186,55 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
     }
   }
 
+  String _faultKey(String lane, int number) => '$lane-$number';
+
   bool _fault(String lane, int number) {
+    final key = _faultKey(lane, number);
+    if (optimisticFaults.containsKey(key)) {
+      return optimisticFaults[key]!;
+    }
+
     final raw = _state[lane == 'blue' ? 'blueFaults' : 'redFaults'];
     if (raw is! Map) return false;
     return raw[number.toString()] == true;
+  }
+
+  Future<void> _changeFault(String lane, int number) async {
+    final key = _faultKey(lane, number);
+    final next = !_fault(lane, number);
+
+    // Give the handler instant visual feedback, then let Firebase confirm it.
+    setState(() => optimisticFaults[key] = next);
+
+    try {
+      await service.setFault(
+        roomId: widget.join.roomId,
+        lane: lane,
+        dogNumber: number,
+        active: next,
+      );
+
+      // Leave a tiny moment for the room stream to receive the server value
+      // before dropping the local override.
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+
+      if (mounted) {
+        setState(() => optimisticFaults.remove(key));
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => optimisticFaults.remove(key));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not change $lane fault $number: '
+            '${e.toString().replaceFirst('Exception: ', '')}',
+          ),
+        ),
+      );
+    }
   }
 
   bool _roleOnline(String role) {
@@ -573,11 +620,7 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
                   height: compact ? 40 : 52,
                   fontSize: compact ? 17 : 22,
                   onTap: canTap
-                      ? () => service.toggleFault(
-                            roomId: widget.join.roomId,
-                            lane: lane,
-                            dogNumber: i,
-                          )
+                      ? () => _changeFault(lane, i)
                       : () {},
                 ),
                 if (i != 4)

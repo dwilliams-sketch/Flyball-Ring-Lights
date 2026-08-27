@@ -19,31 +19,19 @@
         },
 
         "state": {
-          "status": {
-            ".write": "auth != null && (root.child('rooms').child($roomId).child('meta').child('hostUid').val() == auth.uid || root.child('rooms').child($roomId).child('roles').child('red').child('uid').val() == auth.uid)"
-          },
+          ".write": "auth != null && root.child('rooms').child($roomId).child('meta').child('hostUid').val() == auth.uid",
 
-          "zeroAt": {
-            ".write": "auth != null && root.child('rooms').child($roomId).child('meta').child('hostUid').val() == auth.uid"
+          "status": {
+            ".write": "auth != null && root.child('rooms').child($roomId).child('roles').child('red').child('uid').val() == auth.uid"
           },
 
           "stoppedAt": {
-            ".write": "auth != null && (root.child('rooms').child($roomId).child('meta').child('hostUid').val() == auth.uid || root.child('rooms').child($roomId).child('roles').child('red').child('uid').val() == auth.uid)"
-          },
-
-          "generation": {
-            ".write": "auth != null && root.child('rooms').child($roomId).child('meta').child('hostUid').val() == auth.uid"
-          },
-
-          "blueFaults": {
-            "$dog": {
-              ".write": "auth != null && root.child('rooms').child($roomId).child('meta').child('hostUid').val() == auth.uid"
-            }
+            ".write": "auth != null && root.child('rooms').child($roomId).child('roles').child('red').child('uid').val() == auth.uid"
           },
 
           "redFaults": {
             "$dog": {
-              ".write": "auth != null && (root.child('rooms').child($roomId).child('meta').child('hostUid').val() == auth.uid || root.child('rooms').child($roomId).child('roles').child('red').child('uid').val() == auth.uid)"
+              ".write": "auth != null && root.child('rooms').child($roomId).child('roles').child('red').child('uid').val() == auth.uid"
             }
           }
         },

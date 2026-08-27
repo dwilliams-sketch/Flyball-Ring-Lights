@@ -338,6 +338,23 @@ class LiveRingService {
     });
   }
 
+  Future<void> setFault({
+    required String roomId,
+    required String lane,
+    required int dogNumber,
+    required bool active,
+  }) async {
+    final path = lane == 'blue' ? 'blueFaults' : 'redFaults';
+    final ref = db.ref('rooms/$roomId/state/$path/$dogNumber');
+
+    await ref.set(active).timeout(
+      const Duration(seconds: 8),
+      onTimeout: () => throw TimeoutException(
+        'Fault light update timed out. Check the live connection.',
+      ),
+    );
+  }
+
   Future<void> toggleFault({
     required String roomId,
     required String lane,
@@ -346,9 +363,21 @@ class LiveRingService {
     final path = lane == 'blue' ? 'blueFaults' : 'redFaults';
     final ref = db.ref('rooms/$roomId/state/$path/$dogNumber');
 
-    await ref.runTransaction((Object? current) {
-      return Transaction.success(current != true);
-    });
+    final event = await ref.once().timeout(
+      const Duration(seconds: 8),
+      onTimeout: () => throw TimeoutException(
+        'Could not read the current fault light.',
+      ),
+    );
+
+    final current = event.snapshot.value == true;
+
+    await setFault(
+      roomId: roomId,
+      lane: lane,
+      dogNumber: dogNumber,
+      active: !current,
+    );
   }
 
   Future<void> leaveRoom(LiveRoomJoin join) async {

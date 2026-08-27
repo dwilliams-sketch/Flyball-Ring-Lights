@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'firebase_options.dart';
 import 'screens/welcome_screen.dart';
 import 'theme/app_theme.dart';
 
@@ -18,7 +19,9 @@ Future<void> main() async {
   // a separate Firebase Web app is registered later.
   if (!kIsWeb) {
     try {
-      await Firebase.initializeApp().timeout(
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      ).timeout(
         const Duration(seconds: 20),
       );
     } catch (error) {

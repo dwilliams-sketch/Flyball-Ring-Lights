@@ -9,11 +9,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: ring-lights-android
+  group: ring-lights-build
   cancel-in-progress: true
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -27,16 +27,17 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Generate Android platform files
+      - name: Generate Android and Web platform files
         run: |
-          rm -rf platform_template android
+          rm -rf platform_template android web
           flutter create \
-            --platforms=android \
+            --platforms=android,web \
             --org com.menaimuttineers \
             --project-name flyball_ring_lights \
             platform_template
 
           cp -R platform_template/android ./android
+          cp -R platform_template/web ./web
           rm -rf platform_template
 
           python3 - <<'PY2'
@@ -77,6 +78,14 @@ jobs:
                   1,
               )
           app_gradle.write_text(a)
+
+          index = Path('web/index.html')
+          w = index.read_text()
+          w = w.replace(
+              '<title>flyball_ring_lights</title>',
+              '<title>Flyball Ring Lights</title>',
+          )
+          index.write_text(w)
           PY2
 
           cp firebase/google-services.json android/app/google-services.json
@@ -92,12 +101,23 @@ jobs:
       - name: Friendly APK name
         run: |
           cp build/app/outputs/flutter-apk/app-debug.apk \
-             build/app/outputs/flutter-apk/Flyball-Ring-Lights-Rev-0.3.1-Account-Fix.apk
+             build/app/outputs/flutter-apk/Flyball-Ring-Lights-Rev-0.4.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Flyball-Ring-Lights-Rev-0-3-1-Account-Fix-APK
-          path: build/app/outputs/flutter-apk/Flyball-Ring-Lights-Rev-0.3.1-Account-Fix.apk
+          name: Flyball-Ring-Lights-Rev-0-4-APK
+          path: build/app/outputs/flutter-apk/Flyball-Ring-Lights-Rev-0.4.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build Web
+        run: flutter build web --release
+
+      - name: Upload Web Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flyball-Ring-Lights-Rev-0-4-Web
+          path: build/web
           if-no-files-found: error
           retention-days: 7

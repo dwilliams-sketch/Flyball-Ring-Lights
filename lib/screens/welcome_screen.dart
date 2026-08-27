@@ -1,9 +1,12 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../services/local_profile_service.dart';
+import '../models/app_profile.dart';
+import '../services/app_repository.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'onboarding/create_account_screen.dart';
+import 'onboarding/sign_in_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -13,7 +16,9 @@ class WelcomeScreen extends StatefulWidget {
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
+  final repo = AppRepository();
   bool checking = true;
+  AppProfile? profile;
 
   @override
   void initState() {
@@ -22,25 +27,24 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Future<void> _check() async {
-    final profile = await LocalProfileService().load();
-    if (!mounted) return;
-
-    if (profile != null) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => HomeScreen(profile: profile)),
-      );
-      return;
+    if (FirebaseAuth.instance.currentUser != null) {
+      try {
+        profile = await repo.loadProfile();
+      } catch (_) {
+        profile = null;
+      }
     }
-
-    setState(() => checking = false);
+    if (mounted) setState(() => checking = false);
   }
 
   @override
   Widget build(BuildContext context) {
     if (checking) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (profile != null) {
+      return HomeScreen(profile: profile!);
     }
 
     return Scaffold(
@@ -85,7 +89,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 42),
+                  const SizedBox(height: 40),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
@@ -104,27 +108,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.login),
                       label: const Text('ALREADY REGISTERED?  SIGN IN'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        side: const BorderSide(color: AppTheme.border),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      onPressed: () => showDialog<void>(
-                        context: context,
-                        builder: (_) => const AlertDialog(
-                          title: Text('Online sign-in comes in Rev 0.2'),
-                          content: Text(
-                            'Rev 0.1 keeps the timing engine local while we prove the lights, timer and sound. Firebase club login and invitations are the next layer.',
-                          ),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SignInScreen(),
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 22),
                   const Text(
-                    'REV 0.1 · LOCAL RING PROTOTYPE',
+                    'REV 0.3 · COMPETITION BETA',
                     style: TextStyle(
                       color: Colors.white30,
                       letterSpacing: 1.2,

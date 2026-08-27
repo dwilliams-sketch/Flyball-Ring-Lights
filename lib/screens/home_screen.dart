@@ -1,10 +1,191 @@
 import 'package:flutter/material.dart';
-import '../models/local_profile.dart';
-import '../services/local_profile_service.dart';
+
+import '../models/app_profile.dart';
+import '../services/app_repository.dart';
 import '../theme/app_theme.dart';
+import 'club/club_screen.dart';
+import 'competition/competition_setup_screen.dart';
+import 'competition/history_screen.dart';
+import 'dogs/dogs_screen.dart';
 import 'ring/ring_screen.dart';
 import 'welcome_screen.dart';
 
-class HomeScreen extends StatelessWidget{final LocalProfile profile;const HomeScreen({super.key,required this.profile});Future<void> _reset(BuildContext c) async {await LocalProfileService().clear();if(!c.mounted)return;Navigator.of(c).pushAndRemoveUntil(MaterialPageRoute(builder:(_)=>const WelcomeScreen()),(_)=>false);} @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:Text(profile.clubName),actions:[PopupMenuButton<String>(onSelected:(v){if(v=='reset')_reset(context);},itemBuilder:(_)=>const [PopupMenuItem(value:'reset',child:Text('Reset Rev 0.1 profile'))])]),body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[Text('Ahoy ${profile.displayName}',style:const TextStyle(fontSize:30,fontWeight:FontWeight.w900)),const SizedBox(height:6),const Text('Ready to train?',style:TextStyle(color:AppTheme.textMuted,fontSize:17)),const SizedBox(height:28),SizedBox(height:120,child:FilledButton(onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const RingScreen())),style:FilledButton.styleFrom(backgroundColor:AppTheme.gold,foregroundColor:Colors.black),child:const Column(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(Icons.play_arrow_rounded,size:42),SizedBox(height:4),Text('START A RING',style:TextStyle(fontSize:23))]))),const SizedBox(height:18),const _Tile(icon:Icons.link,title:'Join existing ring',subtitle:'Room tokens + QR joining arrive in Rev 0.2'),const _Tile(icon:Icons.pets_outlined,title:'Dogs & Pass Planner',subtitle:'Start marks and release plans arrive in Rev 0.3'),const _Tile(icon:Icons.analytics_outlined,title:'Training history',subtitle:'Fault analysis and reports arrive after live-ring testing'),const SizedBox(height:24),const Card(child:Padding(padding:EdgeInsets.all(16),child:Text('REV 0.1 PURPOSE\n\nProve the local lights, timer, controls and sound are excellent before any cloud synchronisation is added.',style:TextStyle(color:AppTheme.textMuted,height:1.4))))])));
+class HomeScreen extends StatelessWidget {
+  final AppProfile profile;
+  const HomeScreen({super.key, required this.profile});
+
+  Future<void> _signOut(BuildContext context) async {
+    await AppRepository().signOut();
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+      (_) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(profile.clubName),
+      actions: [
+        PopupMenuButton<String>(
+          onSelected: (v) {
+            if (v == 'signout') _signOut(context);
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'signout', child: Text('Sign out')),
+          ],
+        ),
+      ],
+    ),
+    body: SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text(
+            'Ahoy ${profile.displayName}',
+            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'What are we doing today?',
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 17),
+          ),
+          const SizedBox(height: 24),
+          _BigAction(
+            icon: Icons.traffic_rounded,
+            title: 'START TRAINING RING',
+            subtitle: 'Lights, timer, sounds and lane faults',
+            color: AppTheme.gold,
+            darkText: true,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const RingScreen()),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _BigAction(
+            icon: Icons.emoji_events_outlined,
+            title: 'COMPETITION MODE',
+            subtitle: 'Record line-up, times, faults, reruns and crossovers',
+            color: AppTheme.green,
+            darkText: true,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CompetitionSetupScreen(profile: profile),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          _Tile(
+            icon: Icons.pets,
+            title: 'Dogs',
+            subtitle: 'Dog records, start marks and recorded times',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => DogsScreen(profile: profile)),
+            ),
+          ),
+          _Tile(
+            icon: Icons.history,
+            title: 'Competition history',
+            subtitle: 'Saved competition sessions and legs',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => HistoryScreen(profile: profile)),
+            ),
+          ),
+          _Tile(
+            icon: Icons.groups_outlined,
+            title: 'Club',
+            subtitle: 'Invite code and workspace details',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => ClubScreen(profile: profile)),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'REV 0.3 COMPETITION BETA\n\n'
+                'The live multi-device ring comes next. This build focuses on '
+                'real accounts, clubs, dogs and competition records.',
+                style: TextStyle(color: AppTheme.textMuted, height: 1.4),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
-class _Tile extends StatelessWidget{final IconData icon;final String title,subtitle;const _Tile({required this.icon,required this.title,required this.subtitle});@override Widget build(BuildContext context)=>Card(child:ListTile(leading:Icon(icon,color:AppTheme.gold),title:Text(title),subtitle:Text(subtitle),trailing:const Icon(Icons.lock_outline,color:Colors.white24)));}
+
+class _BigAction extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final bool darkText;
+  final VoidCallback onTap;
+
+  const _BigAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.darkText,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 112,
+    child: FilledButton(
+      onPressed: onTap,
+      style: FilledButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: darkText ? Colors.black : Colors.white,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 40),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Text(subtitle, style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _Tile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _Tile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: AppTheme.gold),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+    ),
+  );
+}

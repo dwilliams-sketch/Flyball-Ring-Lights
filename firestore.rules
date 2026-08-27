@@ -1,0 +1,45 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function myClubId() {
+      return myUser().data.clubId;
+    }
+
+    match /users/{uid} {
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow read, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    match /clubs/{clubId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid;
+
+      allow read: if signedIn()
+        && (
+          resource.data.ownerUid == request.auth.uid
+          || myClubId() == clubId
+        );
+
+      allow update: if signedIn()
+        && myClubId() == clubId;
+
+      allow delete: if signedIn()
+        && resource.data.ownerUid == request.auth.uid;
+
+      match /{document=**} {
+        allow read, write: if signedIn() && myClubId() == clubId;
+      }
+    }
+  }
+}

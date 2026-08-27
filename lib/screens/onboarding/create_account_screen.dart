@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../models/local_profile.dart';
-import '../../services/local_profile_service.dart';
+import '../../services/app_repository.dart';
 import '../../theme/app_theme.dart';
 import '../home_screen.dart';
 
@@ -13,186 +12,176 @@ class CreateAccountScreen extends StatefulWidget {
 }
 
 class _CreateAccountScreenState extends State<CreateAccountScreen> {
+  final repo = AppRepository();
+  final form = GlobalKey<FormState>();
   final name = TextEditingController();
   final email = TextEditingController();
+  final password = TextEditingController();
   final club = TextEditingController();
-  final form = GlobalKey<FormState>();
-
-  String mode = 'create';
+  final invite = TextEditingController();
   bool saving = false;
+  bool hidePassword = true;
+  String mode = 'create';
 
   @override
   void dispose() {
     name.dispose();
     email.dispose();
+    password.dispose();
     club.dispose();
+    invite.dispose();
     super.dispose();
   }
 
-  Future<void> _continue() async {
+  Future<void> _submit() async {
     if (!(form.currentState?.validate() ?? false)) return;
-
-    if (mode == 'join') {
-      await showDialog<void>(
-        context: context,
-        builder: (_) => const AlertDialog(
-          title: Text('Club invitations arrive in Rev 0.2'),
-          content: Text(
-            'The final version will let you scan a QR code or enter the Captain’s invitation code. For Rev 0.1, choose Create a Club so we can test the local ring.',
-          ),
-        ),
-      );
-      return;
-    }
-
     setState(() => saving = true);
+    try {
+      final profile = mode == 'create'
+          ? await repo.createClubAccount(
+              displayName: name.text,
+              email: email.text,
+              password: password.text,
+              clubName: club.text,
+            )
+          : await repo.joinClubAccount(
+              displayName: name.text,
+              email: email.text,
+              password: password.text,
+              inviteCode: invite.text,
+            );
 
-    final profile = LocalProfile(
-      displayName: name.text.trim(),
-      email: email.text.trim(),
-      clubName: club.text.trim(),
-    );
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => HomeScreen(profile: profile)),
+        (_) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_friendly(e))),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
 
-    await LocalProfileService().save(profile);
-    if (!mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => HomeScreen(profile: profile)),
-      (_) => false,
-    );
+  String _friendly(Object e) {
+    final s = e.toString();
+    if (s.contains('email-already-in-use')) return 'That email already has an account.';
+    if (s.contains('weak-password')) return 'Please use a stronger password (at least 6 characters).';
+    if (s.contains('invalid-email')) return 'Please check the email address.';
+    return s.replaceFirst('FirebaseException: ', '');
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Create your account')),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 580),
-              child: Form(
-                key: form,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Welcome aboard',
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w900,
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Create your account')),
+    body: SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 580),
+            child: Form(
+              key: form,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text('Welcome aboard',
+                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Create your club workspace or join your crew with an invite code.',
+                    style: TextStyle(color: AppTheme.textMuted, height: 1.4),
+                  ),
+                  const SizedBox(height: 24),
+                  TextFormField(
+                    controller: name,
+                    decoration: const InputDecoration(
+                      labelText: 'Your name',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                    validator: (v) => (v ?? '').trim().isEmpty ? 'Please enter your name.' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      prefixIcon: Icon(Icons.alternate_email),
+                    ),
+                    validator: (v) => !(v ?? '').contains('@') ? 'Please enter a valid email.' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: password,
+                    obscureText: hidePassword,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        onPressed: () => setState(() => hidePassword = !hidePassword),
+                        icon: Icon(hidePassword ? Icons.visibility : Icons.visibility_off),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'We’ll keep setup short. A Captain creates the club workspace, then invites the rest of the crew.',
-                      style: TextStyle(
-                        color: AppTheme.textMuted,
-                        height: 1.4,
+                    validator: (v) => (v ?? '').length < 6 ? 'Use at least 6 characters.' : null,
+                  ),
+                  const SizedBox(height: 22),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'create',
+                        icon: Icon(Icons.flag_outlined),
+                        label: Text('Create Club'),
                       ),
-                    ),
-                    const SizedBox(height: 26),
+                      ButtonSegment(
+                        value: 'join',
+                        icon: Icon(Icons.group_add_outlined),
+                        label: Text('Join Club'),
+                      ),
+                    ],
+                    selected: {mode},
+                    onSelectionChanged: (v) => setState(() => mode = v.first),
+                  ),
+                  const SizedBox(height: 14),
+                  if (mode == 'create')
                     TextFormField(
-                      controller: name,
-                      textInputAction: TextInputAction.next,
+                      controller: club,
                       decoration: const InputDecoration(
-                        labelText: 'Your name',
-                        prefixIcon: Icon(Icons.person_outline),
+                        labelText: 'Club name',
+                        hintText: 'e.g. Menai Muttineers',
+                        prefixIcon: Icon(Icons.groups_outlined),
                       ),
-                      validator: (value) => (value ?? '').trim().isEmpty
-                          ? 'Please enter your name.'
+                      validator: (v) => mode == 'create' && (v ?? '').trim().isEmpty
+                          ? 'Please enter your club name.'
+                          : null,
+                    )
+                  else
+                    TextFormField(
+                      controller: invite,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                        labelText: 'Club invite code',
+                        hintText: 'e.g. MENA-4827',
+                        prefixIcon: Icon(Icons.key_outlined),
+                      ),
+                      validator: (v) => mode == 'join' && (v ?? '').trim().isEmpty
+                          ? 'Please enter the invite code.'
                           : null,
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: email,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.alternate_email),
-                      ),
-                      validator: (value) => !(value ?? '').contains('@')
-                          ? 'Please enter a valid email.'
-                          : null,
-                    ),
-                    const SizedBox(height: 22),
-                    const Text(
-                      'What are you here to do?',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 10),
-                    SegmentedButton<String>(
-                      segments: const [
-                        ButtonSegment(
-                          value: 'create',
-                          icon: Icon(Icons.flag_outlined),
-                          label: Text('Create a Club'),
-                        ),
-                        ButtonSegment(
-                          value: 'join',
-                          icon: Icon(Icons.group_add_outlined),
-                          label: Text('Join My Club'),
-                        ),
-                      ],
-                      selected: {mode},
-                      onSelectionChanged: (values) {
-                        setState(() => mode = values.first);
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    if (mode == 'create')
-                      TextFormField(
-                        controller: club,
-                        decoration: const InputDecoration(
-                          labelText: 'Club name',
-                          hintText: 'e.g. Menai Muttineers',
-                          prefixIcon: Icon(Icons.groups_outlined),
-                        ),
-                        validator: (value) =>
-                            mode == 'create' && (value ?? '').trim().isEmpty
-                                ? 'Please enter your club name.'
-                                : null,
-                      )
-                    else
-                      const Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Row(
-                            children: [
-                              Icon(Icons.qr_code_2, color: AppTheme.gold),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'In Rev 0.2 this becomes Scan Invite QR / Enter Invite Code.',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: saving ? null : _continue,
-                      child: Text(saving ? 'SETTING UP…' : 'CONTINUE'),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Rev 0.1 stores this prototype profile only on this device. No password is stored.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white38,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: saving ? null : _submit,
+                    child: Text(saving ? 'SETTING UP…' : 'CONTINUE'),
+                  ),
+                ],
               ),
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 }

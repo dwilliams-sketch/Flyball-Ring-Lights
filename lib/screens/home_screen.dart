@@ -129,7 +129,7 @@ class HomeScreen extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'REV 0.5.1 LIVE MULTI-DEVICE BETA\n\n'
+                'REV 0.5.2 LIVE MULTI-DEVICE BETA\n\n'
                 'Live Ring is now ready for multi-device beta testing alongside '
                 'the existing dogs, competitions and records.',
                 style: TextStyle(color: AppTheme.textMuted, height: 1.4),

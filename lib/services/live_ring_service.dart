@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 
 import '../models/live_room.dart';
@@ -10,11 +11,18 @@ class LiveRingService {
   final FirebaseAuth auth;
   final FirebaseDatabase db;
 
+  static const databaseUrl =
+      'https://flyball-ring-lights-default-rtdb.europe-west1.firebasedatabase.app';
+
   LiveRingService({
     FirebaseAuth? auth,
     FirebaseDatabase? db,
   })  : auth = auth ?? FirebaseAuth.instance,
-        db = db ?? FirebaseDatabase.instance;
+        db = db ??
+            FirebaseDatabase.instanceFor(
+              app: Firebase.app(),
+              databaseURL: databaseUrl,
+            );
 
   static const roomLifetime = Duration(hours: 3);
 
@@ -48,7 +56,15 @@ class LiveRingService {
   }
 
   Future<int> serverOffsetMs() async {
-    final event = await db.ref('.info/serverTimeOffset').once();
+    final event = await db
+        .ref('.info/serverTimeOffset')
+        .once()
+        .timeout(
+          const Duration(seconds: 12),
+          onTimeout: () => throw TimeoutException(
+            'Realtime Database clock check timed out. Check internet access.',
+          ),
+        );
     final value = event.snapshot.value;
     return value is num ? value.toInt() : 0;
   }
@@ -81,7 +97,12 @@ class LiveRingService {
       'createdAt': ServerValue.timestamp,
       'expiresAt': expiresAt,
       'ended': false,
-    });
+    }).timeout(
+      const Duration(seconds: 12),
+      onTimeout: () => throw TimeoutException(
+        'Creating room details timed out.',
+      ),
+    );
 
     await roomRef.child('state').set({
       'status': 'ready',
@@ -100,14 +121,24 @@ class LiveRingService {
         '3': false,
         '4': false,
       },
-    });
+    }).timeout(
+      const Duration(seconds: 12),
+      onTimeout: () => throw TimeoutException(
+        'Creating initial ring state timed out.',
+      ),
+    );
 
     await db.ref('roomCodes/$code').set({
       'roomId': roomId,
       'ownerUid': user.uid,
       'expiresAt': expiresAt,
       'token': token,
-    });
+    }).timeout(
+      const Duration(seconds: 12),
+      onTimeout: () => throw TimeoutException(
+        'Creating room code timed out.',
+      ),
+    );
 
     final hostRef = roomRef.child('roles/host');
     await hostRef.onDisconnect().update({
@@ -120,7 +151,12 @@ class LiveRingService {
       'name': displayName.trim().isEmpty ? 'Blue Host' : displayName.trim(),
       'online': true,
       'lastSeen': ServerValue.timestamp,
-    });
+    }).timeout(
+      const Duration(seconds: 12),
+      onTimeout: () => throw TimeoutException(
+        'Registering Blue Host timed out.',
+      ),
+    );
 
     return LiveRoomJoin(
       roomId: roomId,

@@ -18,11 +18,25 @@ Future<void> main() async {
   Object? firebaseError;
 
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    ).timeout(
-      const Duration(seconds: 20),
-    );
+    if (kIsWeb) {
+      // Browsers do not have Android's google-services resources, so the
+      // Firebase Web configuration must be supplied explicitly.
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.web,
+      ).timeout(
+        const Duration(seconds: 20),
+      );
+    } else {
+      // Android's google-services.json now correctly creates/configures the
+      // native DEFAULT Firebase app. Calling initializeApp with another set
+      // of explicit DEFAULT options can cause [core/duplicate-app].
+      //
+      // Calling initializeApp() with no options attaches FlutterFire to the
+      // native DEFAULT app/config instead.
+      await Firebase.initializeApp().timeout(
+        const Duration(seconds: 20),
+      );
+    }
   } catch (error) {
     firebaseError = error;
   }

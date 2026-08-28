@@ -48,7 +48,7 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
   bool leaving = false;
   int autoStoppedGeneration = -1;
 
-  final Map<String, bool> optimisticFaults = {};
+  final Map<String, bool> pendingFaults = {};
 
   @override
   void initState() {
@@ -80,6 +80,7 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
     roomSub = service.roomStream(widget.join.roomId).listen(
       (value) {
         room = value;
+        _reconcilePendingFaults();
         _recalculate();
       },
       onError: (Object error) {
@@ -188,23 +189,54 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
 
   String _faultKey(String lane, int number) => '$lane-$number';
 
-  bool _fault(String lane, int number) {
-    final key = _faultKey(lane, number);
-    if (optimisticFaults.containsKey(key)) {
-      return optimisticFaults[key]!;
-    }
-
+  bool _serverFault(String lane, int number) {
     final raw = _state[lane == 'blue' ? 'blueFaults' : 'redFaults'];
     if (raw is! Map) return false;
     return raw[number.toString()] == true;
+  }
+
+  bool _fault(String lane, int number) {
+    final key = _faultKey(lane, number);
+
+    // If a tap is waiting for the room stream to confirm, keep showing the
+    // user's requested state instead of falling back to stale network data.
+    if (pendingFaults.containsKey(key)) {
+      return pendingFaults[key]!;
+    }
+
+    return _serverFault(lane, number);
+  }
+
+  void _reconcilePendingFaults() {
+    if (pendingFaults.isEmpty) return;
+
+    final confirmed = <String>[];
+
+    for (final entry in pendingFaults.entries) {
+      final parts = entry.key.split('-');
+      if (parts.length != 2) continue;
+
+      final lane = parts[0];
+      final number = int.tryParse(parts[1]);
+      if (number == null) continue;
+
+      if (_serverFault(lane, number) == entry.value) {
+        confirmed.add(entry.key);
+      }
+    }
+
+    for (final key in confirmed) {
+      pendingFaults.remove(key);
+    }
   }
 
   Future<void> _changeFault(String lane, int number) async {
     final key = _faultKey(lane, number);
     final next = !_fault(lane, number);
 
-    // Give the handler instant visual feedback, then let Firebase confirm it.
-    setState(() => optimisticFaults[key] = next);
+    // Update instantly. Keep this local state until the Firebase room stream
+    // actually confirms the same value. There is deliberately no 120 ms timer.
+    setState(() => pendingFaults[key] = next);
 
     try {
       await service.setFault(
@@ -214,17 +246,15 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
         active: next,
       );
 
-      // Leave a tiny moment for the room stream to receive the server value
-      // before dropping the local override.
-      await Future<void>.delayed(const Duration(milliseconds: 120));
-
+      // Normally the room stream confirms almost immediately. If it has
+      // already arrived by the time setFault returns, reconcile now too.
       if (mounted) {
-        setState(() => optimisticFaults.remove(key));
+        setState(_reconcilePendingFaults);
       }
     } catch (e) {
       if (!mounted) return;
 
-      setState(() => optimisticFaults.remove(key));
+      setState(() => pendingFaults.remove(key));
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -233,6 +263,21 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
             '${e.toString().replaceFirst('Exception: ', '')}',
           ),
         ),
+      );
+    }
+  }
+
+  Future<void> _resetRoom() async {
+    // RESET is authoritative. Remove any local pending fault display first,
+    // then let the room stream supply the clean false values.
+    setState(pendingFaults.clear);
+
+    try {
+      await service.reset(widget.join.roomId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not reset ring: $e')),
       );
     }
   }
@@ -783,7 +828,7 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
             const SizedBox(width: 7),
             Expanded(
               child: FilledButton.icon(
-                onPressed: () => service.reset(widget.join.roomId),
+                onPressed: _resetRoom,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppTheme.surface2,
                 ),

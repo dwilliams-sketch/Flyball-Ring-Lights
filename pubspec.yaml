@@ -1,7 +1,7 @@
 name: flyball_ring_lights
 description: Flyball Ring Lights - Rev 0.5 live multi-device ring beta
 publish_to: 'none'
-version: 0.5.3+13
+version: 0.5.4+14
 
 environment:
   sdk: '>=3.10.0 <4.0.0'

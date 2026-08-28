@@ -128,7 +128,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ),
                   const SizedBox(height: 22),
                   const Text(
-                    'REV 0.5.3 · LIVE RING BETA',
+                    'REV 0.5.4 · LIVE RING BETA',
                     style: TextStyle(
                       color: Colors.white30,
                       letterSpacing: 1.2,

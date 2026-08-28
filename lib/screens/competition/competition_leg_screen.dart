@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/app_profile.dart';
 import '../../models/competition_entry.dart';
 import '../../models/dog_record.dart';
+import '../../models/fault_type.dart';
 import '../../services/app_repository.dart';
 import '../../theme/app_theme.dart';
 
@@ -49,18 +50,7 @@ class _CompetitionLegScreenState extends State<CompetitionLegScreen> {
     'Bus',
   ];
 
-  static const faultReasons = [
-    'Early pass',
-    'Pass too late',
-    'Dropped ball',
-    'No ball',
-    'Missed jump',
-    'Box fault',
-    'Interference',
-    'Hesitation / stopped',
-    'Handler / release error',
-    'Other',
-  ];
+
 
   @override
   void initState() {
@@ -113,24 +103,11 @@ class _CompetitionLegScreenState extends State<CompetitionLegScreen> {
 
   Future<void> _toggleFault(CompetitionEntry entry) async {
     if (entry.fault) {
-      setState(() {
-        entry.fault = false;
-        entry.faultReason = '';
-        // Remove the newest still-empty rerun that was created from this entry.
-        for (var i = entries.length - 1; i >= 4; i--) {
-          final r = entries[i];
-          if (r.sourceEntryId == entry.id &&
-              r.dogTime.trim().isEmpty &&
-              !r.fault) {
-            entries.removeAt(i);
-            break;
-          }
-        }
-      });
+      setState(() => _clearFault(entry));
       return;
     }
 
-    // Light the fault instantly, then ask the reason.
+    // Light the fault instantly and queue the rerun before asking why.
     setState(() {
       entry.fault = true;
       entries.add(
@@ -145,7 +122,15 @@ class _CompetitionLegScreenState extends State<CompetitionLegScreen> {
       );
     });
 
-    final reason = await showModalBottomSheet<String>(
+    List<FaultType> faultTypes;
+    try {
+      faultTypes = await repo.loadActiveFaultTypes(widget.profile.clubId);
+    } catch (_) {
+      faultTypes = const [];
+    }
+
+    if (!mounted) return;
+    final selectedId = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -159,24 +144,72 @@ class _CompetitionLegScreenState extends State<CompetitionLegScreen> {
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
               ),
             ),
-            for (final r in faultReasons)
+            for (final fault in faultTypes)
               ListTile(
-                title: Text(r),
-                onTap: () => Navigator.pop(context, r),
+                title: Text(fault.label),
+                onTap: () => Navigator.pop(context, fault.id),
               ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.edit_note_rounded),
+              title: const Text('Other'),
+              subtitle: const Text('Type exactly what happened'),
+              onTap: () => Navigator.pop(context, '__other__'),
+            ),
           ],
         ),
       ),
     );
 
-    if (!mounted || reason == null) return;
-    if (reason == 'Other') {
+    if (!mounted) return;
+    if (selectedId == null) {
+      setState(() => _clearFault(entry));
+      return;
+    }
+
+    if (selectedId == '__other__') {
       final other = await _askOtherReason();
-      if (other != null && other.trim().isNotEmpty) {
-        setState(() => entry.faultReason = other.trim());
+      if (!mounted) return;
+      if (other == null || other.trim().isEmpty) {
+        setState(() => _clearFault(entry));
+        return;
       }
-    } else {
-      setState(() => entry.faultReason = reason);
+      setState(() {
+        entry.faultTypeId = 'other';
+        entry.faultReason = 'Other';
+        entry.faultOtherText = other.trim();
+      });
+      return;
+    }
+
+    final selected = faultTypes.where((f) => f.id == selectedId).firstOrNull;
+    if (selected == null) {
+      setState(() => _clearFault(entry));
+      return;
+    }
+
+    setState(() {
+      entry.faultTypeId = selected.id;
+      entry.faultReason = selected.label;
+      entry.faultOtherText = '';
+    });
+  }
+
+  void _clearFault(CompetitionEntry entry) {
+    entry.fault = false;
+    entry.faultTypeId = '';
+    entry.faultReason = '';
+    entry.faultOtherText = '';
+
+    // Remove the newest still-empty rerun that was created from this entry.
+    for (var i = entries.length - 1; i >= 4; i--) {
+      final r = entries[i];
+      if (r.sourceEntryId == entry.id &&
+          r.dogTime.trim().isEmpty &&
+          !r.fault) {
+        entries.removeAt(i);
+        break;
+      }
     }
   }
 
@@ -440,8 +473,11 @@ class _EntryCardState extends State<_EntryCard> {
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Fault: ${e.faultReason}',
-                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w800)),
+                child: Text(
+                  'Fault: ${e.faultReason}'
+                  '${e.faultOtherText.isEmpty ? '' : ' — ${e.faultOtherText}'}',
+                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w800),
+                ),
               ),
             ],
             const SizedBox(height: 10),
@@ -526,4 +562,9 @@ class _EntryCardState extends State<_EntryCard> {
       ),
     );
   }
+}
+
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../models/live_room.dart';
@@ -12,6 +13,7 @@ import '../../services/ring_audio_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/fault_button.dart';
 import '../../widgets/flyball_lamp.dart';
+import '../../widgets/camera_beta_panel.dart';
 
 enum _LivePhase { none, red1, red2, red3, green }
 
@@ -44,10 +46,15 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
   bool firstPhaseSample = true;
 
   bool soundOn = false;
+  bool hapticsOn = true;
   double volume = .65;
+  String displayLayout = 'auto';
+  bool cameraPanelOn = false;
   bool leaving = false;
   int autoStoppedGeneration = -1;
+  int cameraCaptureGeneration = -1;
 
+  final CameraBetaController cameraBetaController = CameraBetaController();
   final Map<String, bool> pendingFaults = {};
 
   @override
@@ -58,15 +65,73 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
     // multiple devices producing slightly separated beeps.
     soundOn = widget.join.isDisplay;
 
+    _loadDevicePreferences();
     _start();
   }
 
-  Future<void> _start() async {
-    if (!kIsWeb) {
+  bool get _passiveDisplay => widget.join.isDisplay || widget.join.isViewer;
+
+  Future<void> _loadDevicePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      soundOn = prefs.getBool('live_sound') ?? widget.join.isDisplay;
+      hapticsOn = prefs.getBool('live_haptics') ?? true;
+      volume = prefs.getDouble('live_volume') ?? .65;
+      displayLayout = prefs.getString('display_layout') ?? 'auto';
+    });
+    audio.enabled = soundOn;
+    audio.volume = volume;
+    await _applyDisplayOrientation();
+  }
+
+  Future<void> _saveDevicePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('live_sound', soundOn);
+    await prefs.setBool('live_haptics', hapticsOn);
+    await prefs.setDouble('live_volume', volume);
+    await prefs.setString('display_layout', displayLayout);
+  }
+
+  Future<void> _applyDisplayOrientation() async {
+    if (kIsWeb || !_passiveDisplay) return;
+    if (displayLayout == 'portrait') {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    } else if (displayLayout == 'landscape') {
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.landscapeLeft,
         DeviceOrientation.landscapeRight,
       ]);
+    } else {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+  }
+
+  bool _usePortraitDisplay(BoxConstraints constraints) {
+    if (!_passiveDisplay) return false;
+    if (displayLayout == 'portrait') return true;
+    if (displayLayout == 'landscape') return false;
+    return constraints.maxHeight > constraints.maxWidth;
+  }
+
+  Future<void> _start() async {
+    if (!kIsWeb) {
+      if (_passiveDisplay) {
+        await _applyDisplayOrientation();
+      } else {
+        await SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+      }
     }
 
     await WakelockPlus.enable();
@@ -135,6 +200,7 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
     if (nextElapsed > 60000) nextElapsed = 60000;
 
     final nextPhase = _phaseFor(status, nextElapsed);
+    elapsedMs = nextElapsed;
 
     if (nextPhase != phase) {
       previousPhase = phase;
@@ -145,9 +211,15 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
       } else {
         firstPhaseSample = false;
       }
-    }
 
-    elapsedMs = nextElapsed;
+      if (nextPhase == _LivePhase.green &&
+          widget.join.isDisplay &&
+          cameraPanelOn &&
+          cameraCaptureGeneration != _generation) {
+        cameraCaptureGeneration = _generation;
+        unawaited(cameraBetaController.captureAtZero(nextElapsed));
+      }
+    }
 
     if (widget.join.isHost &&
         status != 'ready' &&
@@ -178,9 +250,19 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
     audio.enabled = soundOn;
     audio.volume = volume;
 
-    if (p == _LivePhase.red1 ||
+    final isRedCue = p == _LivePhase.red1 ||
         p == _LivePhase.red2 ||
-        p == _LivePhase.red3) {
+        p == _LivePhase.red3;
+
+    if (hapticsOn) {
+      if (isRedCue) {
+        unawaited(HapticFeedback.lightImpact());
+      } else if (p == _LivePhase.green) {
+        unawaited(HapticFeedback.heavyImpact());
+      }
+    }
+
+    if (isRedCue) {
       await audio.redCue();
     } else if (p == _LivePhase.green) {
       await audio.greenCue();
@@ -270,7 +352,10 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
   Future<void> _resetRoom() async {
     // RESET is authoritative. Remove any local pending fault display first,
     // then let the room stream supply the clean false values.
-    setState(pendingFaults.clear);
+    setState(() {
+      pendingFaults.clear();
+      cameraCaptureGeneration = -1;
+    });
 
     try {
       await service.reset(widget.join.roomId);
@@ -423,61 +508,46 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
         body: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final compact = constraints.maxHeight < 420;
-              final veryCompact = constraints.maxHeight < 330;
+              final portraitDisplay = _usePortraitDisplay(constraints);
+              final compact = portraitDisplay
+                  ? constraints.maxWidth < 560
+                  : constraints.maxHeight < 420;
+              final veryCompact = portraitDisplay
+                  ? constraints.maxWidth < 400
+                  : constraints.maxHeight < 330;
+              final narrow = constraints.maxWidth < 720;
+              final cameraHeight = portraitDisplay
+                  ? (constraints.maxHeight > 900 ? 245.0 : 190.0)
+                  : (constraints.maxHeight > 650 ? 210.0 : 150.0);
 
               return Column(
                 children: [
                   _topBar(
                     compact: compact,
                     veryCompact: veryCompact,
+                    narrow: narrow,
                   ),
                   Expanded(
                     child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: compact ? 6 : 12,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 25,
-                            child: _faultLane(
-                              lane: 'blue',
-                              title: 'BLUE',
-                              color: AppTheme.blueLane,
-                              canTap: widget.join.isHost,
-                              compact: compact,
-                            ),
-                          ),
-                          SizedBox(width: compact ? 5 : 10),
-                          Expanded(
-                            flex: 50,
-                            child: _tower(
-                              compact: compact,
-                              veryCompact: veryCompact,
-                            ),
-                          ),
-                          SizedBox(width: compact ? 5 : 10),
-                          Expanded(
-                            flex: 25,
-                            child: _faultLane(
-                              lane: 'red',
-                              title: 'RED',
-                              color: AppTheme.redLane,
-                              canTap:
-                                  widget.join.isRed || widget.join.isHost,
-                              compact: compact,
-                            ),
-                          ),
-                        ],
-                      ),
+                      padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 12),
+                      child: portraitDisplay
+                          ? _portraitRingLayout(compact: compact, veryCompact: veryCompact)
+                          : _landscapeRingLayout(compact: compact, veryCompact: veryCompact),
                     ),
                   ),
-                  if (widget.join.isHost || widget.join.isRed)
-                    _controls(
-                      compact: compact,
-                      veryCompact: veryCompact,
+                  if (cameraPanelOn && widget.join.isDisplay)
+                    SizedBox(
+                      height: cameraHeight,
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(compact ? 6 : 12, 3, compact ? 6 : 12, 5),
+                        child: CameraBetaPanel(
+                          controller: cameraBetaController,
+                          compact: compact,
+                        ),
+                      ),
                     ),
+                  if (widget.join.isHost || widget.join.isRed)
+                    _controls(compact: compact, veryCompact: veryCompact),
                 ],
               );
             },
@@ -487,9 +557,118 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
     );
   }
 
+  Widget _landscapeRingLayout({
+    required bool compact,
+    required bool veryCompact,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 25,
+          child: _faultLane(
+            lane: 'blue',
+            title: 'BLUE',
+            color: AppTheme.blueLane,
+            canTap: widget.join.isHost,
+            compact: compact,
+          ),
+        ),
+        SizedBox(width: compact ? 5 : 10),
+        Expanded(
+          flex: 50,
+          child: _tower(compact: compact, veryCompact: veryCompact),
+        ),
+        SizedBox(width: compact ? 5 : 10),
+        Expanded(
+          flex: 25,
+          child: _faultLane(
+            lane: 'red',
+            title: 'RED',
+            color: AppTheme.redLane,
+            canTap: widget.join.isRed || widget.join.isHost,
+            compact: compact,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _portraitRingLayout({
+    required bool compact,
+    required bool veryCompact,
+  }) {
+    return Column(
+      children: [
+        _faultLaneHorizontal(
+          lane: 'blue',
+          title: 'BLUE',
+          color: AppTheme.blueLane,
+          canTap: widget.join.isHost,
+          compact: compact,
+        ),
+        SizedBox(height: compact ? 4 : 8),
+        Expanded(
+          child: _tower(compact: compact, veryCompact: veryCompact),
+        ),
+        SizedBox(height: compact ? 4 : 8),
+        _faultLaneHorizontal(
+          lane: 'red',
+          title: 'RED',
+          color: AppTheme.redLane,
+          canTap: widget.join.isRed || widget.join.isHost,
+          compact: compact,
+        ),
+      ],
+    );
+  }
+
+  Widget _faultLaneHorizontal({
+    required String lane,
+    required String title,
+    required Color color,
+    required bool canTap,
+    required bool compact,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$title LANE',
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.2,
+            fontSize: compact ? 11 : 14,
+          ),
+        ),
+        SizedBox(height: compact ? 3 : 5),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 1; i <= 4; i++) ...[
+              Flexible(
+                child: FaultButton(
+                  dogNumber: i,
+                  laneColor: color,
+                  active: _fault(lane, i),
+                  width: compact ? 62 : 88,
+                  height: compact ? 40 : 52,
+                  fontSize: compact ? 16 : 21,
+                  onTap: canTap ? () => _changeFault(lane, i) : () {},
+                ),
+              ),
+              if (i != 4) SizedBox(width: compact ? 5 : 9),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _topBar({
     required bool compact,
     required bool veryCompact,
+    required bool narrow,
   }) {
     final roleLabel = switch (widget.join.role) {
       'host' => 'BLUE / HOST',
@@ -542,10 +721,8 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
             ),
           ),
           const Spacer(),
-          if (!veryCompact)
-            _presence(
-              compact: compact,
-            ),
+          if (!veryCompact && !narrow)
+            _presence(compact: compact),
           SizedBox(width: compact ? 3 : 8),
           Icon(
             connected
@@ -557,10 +734,13 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
           IconButton(
             tooltip: soundOn ? 'Sound on' : 'Sound off',
             visualDensity: VisualDensity.compact,
-            onPressed: () => setState(() {
-              soundOn = !soundOn;
-              audio.enabled = soundOn;
-            }),
+            onPressed: () {
+              setState(() {
+                soundOn = !soundOn;
+                audio.enabled = soundOn;
+              });
+              _saveDevicePreferences();
+            },
             icon: Icon(
               soundOn
                   ? Icons.volume_up_rounded
@@ -569,20 +749,71 @@ class _LiveRingScreenState extends State<LiveRingScreen> {
               size: compact ? 19 : 22,
             ),
           ),
-          SizedBox(
-            width: compact ? 70 : 105,
-            child: Slider(
-              value: volume,
-              min: 0,
-              max: 1,
-              onChanged: soundOn
-                  ? (value) => setState(() {
-                        volume = value;
-                        audio.volume = value;
-                      })
-                  : null,
+          if (!narrow)
+            SizedBox(
+              width: compact ? 70 : 105,
+              child: Slider(
+                value: volume,
+                min: 0,
+                max: 1,
+                onChanged: soundOn
+                    ? (value) {
+                        setState(() {
+                          volume = value;
+                          audio.volume = value;
+                        });
+                        _saveDevicePreferences();
+                      }
+                    : null,
+              ),
+            ),
+          IconButton(
+            tooltip: hapticsOn ? 'Vibration on' : 'Vibration off',
+            visualDensity: VisualDensity.compact,
+            onPressed: () {
+              setState(() => hapticsOn = !hapticsOn);
+              if (hapticsOn) HapticFeedback.mediumImpact();
+              _saveDevicePreferences();
+            },
+            icon: Icon(
+              hapticsOn ? Icons.vibration_rounded : Icons.mobile_off_rounded,
+              color: hapticsOn ? AppTheme.gold : Colors.white38,
+              size: compact ? 19 : 22,
             ),
           ),
+          if (_passiveDisplay)
+            PopupMenuButton<String>(
+              tooltip: 'Display orientation',
+              initialValue: displayLayout,
+              onSelected: (value) async {
+                setState(() => displayLayout = value);
+                await _saveDevicePreferences();
+                await _applyDisplayOrientation();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'auto', child: Text('Display: Auto')),
+                PopupMenuItem(value: 'portrait', child: Text('Display: Portrait')),
+                PopupMenuItem(value: 'landscape', child: Text('Display: Landscape')),
+              ],
+              icon: Icon(
+                displayLayout == 'portrait'
+                    ? Icons.stay_current_portrait_rounded
+                    : displayLayout == 'landscape'
+                        ? Icons.stay_current_landscape_rounded
+                        : Icons.screen_rotation_alt_rounded,
+                color: AppTheme.gold,
+              ),
+            ),
+          if (widget.join.isDisplay)
+            IconButton(
+              tooltip: cameraPanelOn ? 'Hide Camera Beta' : 'Show Camera Beta',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => cameraPanelOn = !cameraPanelOn),
+              icon: Icon(
+                cameraPanelOn ? Icons.videocam_rounded : Icons.videocam_outlined,
+                color: cameraPanelOn ? AppTheme.gold : Colors.white38,
+              ),
+            ),
         ],
       ),
     );

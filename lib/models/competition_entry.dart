@@ -7,7 +7,9 @@ class CompetitionEntry {
   final String? sourceEntryId;
 
   bool fault;
+  String faultTypeId;
   String faultReason;
+  String faultOtherText;
   String dogTime;
   String startTime;
   String crossover;
@@ -21,7 +23,9 @@ class CompetitionEntry {
     required this.isRerun,
     this.sourceEntryId,
     this.fault = false,
+    this.faultTypeId = '',
     this.faultReason = '',
+    this.faultOtherText = '',
     this.dogTime = '',
     this.startTime = '',
     this.crossover = '',

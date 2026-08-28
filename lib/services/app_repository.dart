@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/app_profile.dart';
 import '../models/competition_entry.dart';
 import '../models/dog_record.dart';
+import '../models/fault_type.dart';
+import '../models/team_record.dart';
 
 class AppRepository {
   final FirebaseAuth auth;
@@ -387,6 +389,7 @@ class AppRepository {
     required DateTime date,
     required String organisation,
     required String teamName,
+    String teamId = '',
     required String division,
     required String seedTime,
     required String notes,
@@ -404,6 +407,7 @@ class AppRepository {
         DateTime(date.year, date.month, date.day),
       ),
       'organisation': organisation,
+      'teamId': teamId.trim(),
       'teamName': teamName.trim(),
       'division': division.trim(),
       'seedTime': _numberOrNull(seedTime),
@@ -531,7 +535,10 @@ class AppRepository {
       'crossover': e.crossover,
       'gapFeet': _numberOrNull(e.gapFeet),
       'fault': e.fault,
+      'faultTypeId': e.faultTypeId,
       'faultReason': e.faultReason,
+      'faultLabelSnapshot': e.faultReason,
+      'faultOtherText': e.faultOtherText,
     }).toList();
 
     final batch = db.batch();
@@ -572,7 +579,10 @@ class AppRepository {
         'crossover': e.crossover,
         'gapFeet': _numberOrNull(e.gapFeet),
         'fault': e.fault,
+        'faultTypeId': e.faultTypeId,
         'faultReason': e.faultReason,
+        'faultLabelSnapshot': e.faultReason,
+        'faultOtherText': e.faultOtherText,
         'lane': lane,
         'recordedAt': FieldValue.serverTimestamp(),
       });
@@ -668,6 +678,371 @@ class AppRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     }
+  }
+
+
+  Future<void> editCompetitionDay({
+    required String clubId,
+    required String competitionId,
+    required String name,
+    required String venue,
+    required DateTime date,
+    required String organisation,
+    required String teamName,
+    String teamId = '',
+    required String division,
+    required String seedTime,
+    required String notes,
+  }) async {
+    await db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('competitionDays')
+        .doc(competitionId)
+        .set({
+      'name': name.trim(),
+      'venue': venue.trim(),
+      'date': Timestamp.fromDate(DateTime(date.year, date.month, date.day)),
+      'organisation': organisation,
+      'teamId': teamId.trim(),
+      'teamName': teamName.trim(),
+      'division': division.trim(),
+      'seedTime': _numberOrNull(seedTime),
+      'notes': notes.trim(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> moveCompetitionToBin(
+    String clubId,
+    String competitionId,
+  ) async {
+    final ref = db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('competitionDays')
+        .doc(competitionId);
+    final current = await ref.get();
+    final status = (current.data()?['status'] ?? 'finished').toString();
+    await ref.set({
+      'status': 'deleted',
+      'statusBeforeDelete': status == 'deleted' ? 'finished' : status,
+      'deletedAt': FieldValue.serverTimestamp(),
+      'deletedBy': currentUser?.uid ?? '',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> restoreCompetitionDay(
+    String clubId,
+    String competitionId,
+  ) async {
+    final ref = db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('competitionDays')
+        .doc(competitionId);
+    final current = await ref.get();
+    final restoreStatus = (current.data()?['statusBeforeDelete'] ?? 'finished').toString();
+    await ref.set({
+      'status': restoreStatus,
+      'statusBeforeDelete': FieldValue.delete(),
+      'deletedAt': FieldValue.delete(),
+      'deletedBy': FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> permanentlyDeleteCompetitionDay(
+    String clubId,
+    String competitionId,
+  ) async {
+    final club = db.collection('clubs').doc(clubId);
+    final sessions = await club
+        .collection('competitionSessions')
+        .where('competitionId', isEqualTo: competitionId)
+        .get();
+    final dogs = await club.collection('dogs').get();
+
+    for (final session in sessions.docs) {
+      final legs = await session.reference.collection('legs').get();
+      for (final leg in legs.docs) {
+        await leg.reference.delete();
+      }
+
+      for (final dog in dogs.docs) {
+        final runs = await dog.reference
+            .collection('runs')
+            .where('sessionId', isEqualTo: session.id)
+            .get();
+        for (final run in runs.docs) {
+          await run.reference.delete();
+        }
+      }
+
+      await session.reference.delete();
+    }
+
+    await club.collection('competitionDays').doc(competitionId).delete();
+  }
+
+  Stream<List<TeamRecord>> teams(
+    String clubId, {
+    bool includeArchived = false,
+  }) {
+    return db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('teams')
+        .snapshots()
+        .map((snap) {
+      final values = snap.docs
+          .map((d) => TeamRecord.fromMap(d.id, d.data()))
+          .where((t) => includeArchived || !t.isArchived)
+          .toList();
+      values.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return values;
+    });
+  }
+
+  Future<void> saveTeam(
+    String clubId, {
+    String teamId = '',
+    required String name,
+  }) async {
+    final ref = teamId.isEmpty
+        ? db.collection('clubs').doc(clubId).collection('teams').doc()
+        : db.collection('clubs').doc(clubId).collection('teams').doc(teamId);
+    await ref.set({
+      'name': name.trim(),
+      'status': 'active',
+      'updatedAt': FieldValue.serverTimestamp(),
+      if (teamId.isEmpty) 'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> archiveTeam(String clubId, String teamId) async {
+    await db.collection('clubs').doc(clubId).collection('teams').doc(teamId).set({
+      'status': 'archived',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> restoreTeam(String clubId, String teamId) async {
+    await db.collection('clubs').doc(clubId).collection('teams').doc(teamId).set({
+      'status': 'active',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<int> importMenaiTeams(String clubId) async {
+    const names = [
+      'Menai Muttineers',
+      'Muttineers Black Flags',
+      'Skalliwags',
+      'Loose Cannons',
+    ];
+    final ref = db.collection('clubs').doc(clubId).collection('teams');
+    final current = await ref.get();
+    final existing = current.docs
+        .map((d) => (d.data()['name'] ?? '').toString().trim().toLowerCase())
+        .toSet();
+    var added = 0;
+    for (final name in names) {
+      if (existing.contains(name.toLowerCase())) continue;
+      await ref.add({
+        'name': name,
+        'status': 'active',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      added++;
+    }
+    return added;
+  }
+
+  Stream<List<FaultType>> faultTypes(
+    String clubId, {
+    bool includeInactive = false,
+  }) {
+    return db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('faultTypes')
+        .snapshots()
+        .map((snap) {
+      final values = snap.docs
+          .map((d) => FaultType.fromMap(d.id, d.data()))
+          .where((f) => includeInactive || f.active)
+          .toList();
+      values.sort((a, b) {
+        final order = a.sortOrder.compareTo(b.sortOrder);
+        return order == 0 ? a.label.compareTo(b.label) : order;
+      });
+      return values;
+    });
+  }
+
+  Future<void> ensureDefaultFaultTypes(String clubId) async {
+    final ref = db.collection('clubs').doc(clubId).collection('faultTypes');
+    final existing = await ref.limit(1).get();
+    if (existing.docs.isNotEmpty) return;
+
+    const defaults = [
+      'Early pass',
+      'Pass too late',
+      'Dropped ball',
+      'No ball',
+      'Missed jump',
+      'Box fault',
+      'Interference',
+      'Hesitation / stopped',
+      'Handler / release error',
+    ];
+
+    final batch = db.batch();
+    for (var i = 0; i < defaults.length; i++) {
+      final doc = ref.doc();
+      batch.set(doc, {
+        'label': defaults[i],
+        'active': true,
+        'sortOrder': i,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  Future<List<FaultType>> loadActiveFaultTypes(String clubId) async {
+    try {
+      await ensureDefaultFaultTypes(clubId);
+    } catch (_) {
+      // A normal member may not have permission to seed club-wide settings.
+      // They can still use the built-in labels until an Owner/Admin opens
+      // Fault Types and creates the shared library.
+    }
+    final snap = await db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('faultTypes')
+        .get();
+    final values = snap.docs
+        .map((d) => FaultType.fromMap(d.id, d.data()))
+        .where((f) => f.active)
+        .toList();
+    values.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    if (values.isNotEmpty) return values;
+
+    const defaults = [
+      'Early pass',
+      'Pass too late',
+      'Dropped ball',
+      'No ball',
+      'Missed jump',
+      'Box fault',
+      'Interference',
+      'Hesitation / stopped',
+      'Handler / release error',
+    ];
+    return [
+      for (var i = 0; i < defaults.length; i++)
+        FaultType(
+          id: 'built_in_$i',
+          label: defaults[i],
+          active: true,
+          sortOrder: i,
+        ),
+    ];
+  }
+
+  Future<void> addFaultType(String clubId, String label) async {
+    final ref = db.collection('clubs').doc(clubId).collection('faultTypes');
+    final all = await ref.get();
+    final highest = all.docs.fold<int>(-1, (value, doc) {
+      final n = (doc.data()['sortOrder'] as num?)?.toInt() ?? -1;
+      return n > value ? n : value;
+    });
+    await ref.add({
+      'label': label.trim(),
+      'active': true,
+      'sortOrder': highest + 1,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> updateFaultType(
+    String clubId,
+    String faultId, {
+    String? label,
+    bool? active,
+    int? sortOrder,
+  }) async {
+    await db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('faultTypes')
+        .doc(faultId)
+        .set({
+      if (label != null) 'label': label.trim(),
+      if (active != null) 'active': active,
+      if (sortOrder != null) 'sortOrder': sortOrder,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> members(String clubId) {
+    return db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('members')
+        .orderBy('displayName')
+        .snapshots();
+  }
+
+  Future<void> updateMemberRole(
+    String clubId,
+    String uid,
+    String role,
+  ) async {
+    final clubMember = db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('members')
+        .doc(uid);
+    final user = db.collection('users').doc(uid);
+    final batch = db.batch();
+    batch.set(clubMember, {
+      'role': role,
+      'status': 'active',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    batch.set(user, {
+      'role': role,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await batch.commit();
+  }
+
+  Future<void> removeMemberAccess(String clubId, String uid) async {
+    final clubMember = db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('members')
+        .doc(uid);
+    final user = db.collection('users').doc(uid);
+    final batch = db.batch();
+    batch.set(clubMember, {
+      'role': 'removed',
+      'status': 'removed',
+      'removedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    batch.set(user, {
+      'role': 'removed',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await batch.commit();
   }
 
   static double? _numberOrNull(String text) {

@@ -1,18 +1,18 @@
-# Revision plan
+# Rev 0.6 implementation plan
 
-## Rev 0.1 — Ring Prototype
-Local lights, timer, sound, fault-lamp prototype and onboarding shell.
+## Stable core
+The Rev 0.5.4 live timing and Realtime Database synchronisation design is retained. Rev 0.6 adds features around it rather than replacing the proven timing model.
 
-## Rev 0.2 — Live Ring
-Firebase auth, club workspaces, Captain/Admin invites, token/QR rooms, Blue/Red/Display/Viewer roles, presence and shared timestamp synchronisation.
+## 0.6 scope
+1. Accessibility: independent sound and haptics, saved per device.
+2. Display: Main Display / Viewer Auto, Portrait or Landscape; controllers remain landscape.
+3. Camera Beta: two web cameras, lane previews, movable start-line overlays and zero capture.
+4. Competition management: edit, bin, restore and permanent delete.
+5. Fault library: dynamic club faults plus free-text Other.
+6. Team library: active/archive/restore team records.
+7. Reporting: competition, multi-competition, team, lane and whole-club KPIs/trends.
+8. Outputs: sponsor PDF, summary copy and CSV copy.
+9. Admin Centre: member roles, teams, faults and deleted competition management.
 
-## Rev 0.3 — Training System
-Dogs, teams, line-ups, start setups (e.g. Chip: 15 ft / second light), Pass Planner, release cues, setup history and run/fault records.
-
-## Rev 0.4 — Full Product
-Stats, quarterly reports, camera/review display, subscription, privacy and admin tools.
-
-## Rev 0.9 — Release Candidate
-Real multi-device training tests.
-
-## Rev 1.0 — First stable public release
+## Deliberately not in 0.6
+Certified electronic judging, AI dog detection, subscriptions and public leaderboards.

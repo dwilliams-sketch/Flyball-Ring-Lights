@@ -1,17 +1,25 @@
-# Flyball Ring Lights — Rev 0.1
+# Flyball Ring Lights — Rev 0.6 Beta
 
-Standalone flyball training-ring prototype by Menai Muttineers.
+Rev 0.6 builds on the working live-ring system with club management, competition data controls, accessibility, reporting and a flexible centre display.
 
-## Included now
-- Dark, high-contrast flyball-style light tower.
-- Three red lamps + green.
-- Timer from `-3.000` to `+60.000`.
-- GO / STOP / RESET.
-- Three short red beeps and a longer/higher green beep.
-- Sound on/off + volume.
-- Four blue and four red fault lamps.
-- Landscape ring mode + keep-screen-awake.
-- Clean first-time account/club prototype.
+## Main additions
+- Main Display / Viewer can be switched between **Auto, Portrait and Landscape**.
+- Blue and Red controller roles remain landscape-first.
+- Device-level sound, volume and haptic/vibration controls for the live light sequence.
+- Dual-webcam start-line Camera Beta on the hosted web Main Display.
+- Real club Teams with active/archive/restore controls.
+- Dynamic competition fault types with add, rename, order, disable and restore.
+- **Other** fault always supports free-typed detail.
+- Competition edit, Move to Bin, Restore and permanent delete of test data.
+- Reports & Performance filters for date period, selected competitions, team, organisation and lane.
+- KPI reporting for races, legs, wins/losses/draws, clean legs, speeds, faults, reruns, dog runs, crossover quality, lane performance and dog performance.
+- Sponsor-ready PDF plus copyable summary and CSV output.
+- Club Admin area for members/roles, teams, faults and deleted competitions.
 
-## Deliberately deferred to Rev 0.2
-No Firebase yet. No live rooms, QR joining, real cloud login, subscription or dog records. Rev 0.1 proves the local timing engine first.
+## Important beta note
+Camera Beta is a training/coaching aid. Ordinary webcams and browser capture latency are not calibrated judging equipment, so the app does not automatically declare a legal/early start from camera footage.
+
+## Firebase
+Rev 0.6 includes **new Firestore rules** for Teams, Fault Types and Admin member access. Publish `firestore.rules` in Firebase Firestore before testing those new areas.
+
+The working Rev 0.5.4 Realtime Database rules are unchanged.

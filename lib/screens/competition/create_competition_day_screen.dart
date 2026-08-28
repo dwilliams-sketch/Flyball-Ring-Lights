@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/app_profile.dart';
+import '../../models/team_record.dart';
 import '../../services/app_repository.dart';
 import 'competition_day_detail_screen.dart';
 
@@ -17,25 +18,25 @@ class CreateCompetitionDayScreen extends StatefulWidget {
       _CreateCompetitionDayScreenState();
 }
 
-class _CreateCompetitionDayScreenState
-    extends State<CreateCompetitionDayScreen> {
+class _CreateCompetitionDayScreenState extends State<CreateCompetitionDayScreen> {
   final form = GlobalKey<FormState>();
   final name = TextEditingController();
   final venue = TextEditingController();
-  final teamName = TextEditingController();
+  final customTeam = TextEditingController();
   final division = TextEditingController();
   final seedTime = TextEditingController();
   final notes = TextEditingController();
 
   DateTime date = DateTime.now();
   String organisation = 'BFA';
+  String selectedTeamId = '__custom__';
   bool busy = false;
 
   @override
   void dispose() {
     name.dispose();
     venue.dispose();
-    teamName.dispose();
+    customTeam.dispose();
     division.dispose();
     seedTime.dispose();
     notes.dispose();
@@ -47,19 +48,20 @@ class _CreateCompetitionDayScreenState
       context: context,
       initialDate: date,
       firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
+      lastDate: DateTime(2040),
     );
-
-    if (chosen != null) {
-      setState(() => date = chosen);
-    }
+    if (chosen != null) setState(() => date = chosen);
   }
 
-  Future<void> _create() async {
+  Future<void> _create(List<TeamRecord> teams) async {
     if (!(form.currentState?.validate() ?? false)) return;
 
-    setState(() => busy = true);
+    final saved = selectedTeamId == '__custom__'
+        ? null
+        : teams.where((t) => t.id == selectedTeamId).firstOrNull;
+    final teamName = saved?.name ?? customTeam.text.trim();
 
+    setState(() => busy = true);
     try {
       final id = await AppRepository().createCompetitionDay(
         clubId: widget.profile.clubId,
@@ -67,14 +69,14 @@ class _CreateCompetitionDayScreenState
         venue: venue.text,
         date: date,
         organisation: organisation,
-        teamName: teamName.text,
+        teamId: saved?.id ?? '',
+        teamName: teamName,
         division: division.text,
         seedTime: seedTime.text,
         notes: notes.text,
       );
 
       if (!mounted) return;
-
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => CompetitionDayDetailScreen(
@@ -85,11 +87,10 @@ class _CreateCompetitionDayScreenState
               'venue': venue.text.trim(),
               'date': date,
               'organisation': organisation,
-              'teamName': teamName.text.trim(),
+              'teamId': saved?.id ?? '',
+              'teamName': teamName,
               'division': division.text.trim(),
-              'seedTime': double.tryParse(
-                seedTime.text.replaceAll(',', '.'),
-              ),
+              'seedTime': double.tryParse(seedTime.text.replaceAll(',', '.')),
               'notes': notes.text.trim(),
               'status': 'active',
             },
@@ -104,13 +105,15 @@ class _CreateCompetitionDayScreenState
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('New competition')),
-        body: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              Form(
+        body: StreamBuilder<List<TeamRecord>>(
+          stream: AppRepository().teams(widget.profile.clubId),
+          builder: (context, snap) {
+            final teams = snap.data ?? const <TeamRecord>[];
+            return SafeArea(
+              child: Form(
                 key: form,
-                child: Column(
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
                   children: [
                     TextFormField(
                       controller: name,
@@ -149,48 +152,52 @@ class _CreateCompetitionDayScreenState
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       value: organisation,
-                      decoration: const InputDecoration(
-                        labelText: 'Organisation',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Organisation'),
                       items: const ['BFA', 'UKFL', 'Other']
-                          .map(
-                            (v) => DropdownMenuItem(
-                              value: v,
-                              child: Text(v),
-                            ),
-                          )
+                          .map((v) => DropdownMenuItem(value: v, child: Text(v)))
                           .toList(),
-                      onChanged: (v) =>
-                          setState(() => organisation = v ?? 'BFA'),
+                      onChanged: (v) => setState(() => organisation = v ?? 'BFA'),
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
-                      controller: teamName,
+                    DropdownButtonFormField<String>(
+                      value: selectedTeamId,
                       decoration: const InputDecoration(
-                        labelText: 'Team name',
-                        hintText: 'e.g. Menai Muttineers',
+                        labelText: 'Team',
+                        prefixIcon: Icon(Icons.flag_outlined),
                       ),
+                      items: [
+                        ...teams.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))),
+                        const DropdownMenuItem(
+                          value: '__custom__',
+                          child: Text('Custom / one-off team name'),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => selectedTeamId = v ?? '__custom__'),
                     ),
+                    if (selectedTeamId == '__custom__') ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: customTeam,
+                        decoration: const InputDecoration(
+                          labelText: 'Team name',
+                          hintText: 'e.g. Menai Muttineers',
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
                           child: TextFormField(
                             controller: division,
-                            decoration: const InputDecoration(
-                              labelText: 'Division',
-                              hintText: 'Optional',
-                            ),
+                            decoration: const InputDecoration(labelText: 'Division'),
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: TextFormField(
                             controller: seedTime,
-                            keyboardType:
-                                const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             decoration: const InputDecoration(
                               labelText: 'Seed / declared time',
                               suffixText: 's',
@@ -206,29 +213,25 @@ class _CreateCompetitionDayScreenState
                       maxLines: 5,
                       decoration: const InputDecoration(
                         labelText: 'Day notes',
-                        hintText:
-                            'Surface, conditions, goals, anything useful…',
+                        hintText: 'Surface, conditions, goals, anything useful…',
                         alignLabelWithHint: true,
                       ),
                     ),
                     const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: busy ? null : _create,
-                        icon: const Icon(Icons.add),
-                        label: Text(
-                          busy
-                              ? 'CREATING…'
-                              : 'CREATE COMPETITION DAY',
-                        ),
-                      ),
+                    FilledButton.icon(
+                      onPressed: busy ? null : () => _create(teams),
+                      icon: const Icon(Icons.add),
+                      label: Text(busy ? 'CREATING…' : 'CREATE COMPETITION DAY'),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       );
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

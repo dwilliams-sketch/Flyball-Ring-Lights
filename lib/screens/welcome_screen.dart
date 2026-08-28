@@ -31,6 +31,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     if (FirebaseAuth.instance.currentUser != null) {
       try {
         profile = await repo.loadProfile();
+        if (profile?.role == 'removed') {
+          await repo.signOut();
+          profile = null;
+        }
       } catch (_) {
         profile = null;
       }
@@ -128,7 +132,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ),
                   const SizedBox(height: 22),
                   const Text(
-                    'REV 0.5.4 · LIVE RING BETA',
+                    'REV 0.6 · PERFORMANCE & DISPLAY BETA',
                     style: TextStyle(
                       color: Colors.white30,
                       letterSpacing: 1.2,

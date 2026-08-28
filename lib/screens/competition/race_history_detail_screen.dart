@@ -204,7 +204,8 @@ class _EntryRow extends StatelessWidget {
     final crossover = (entry['crossover'] ?? '').toString();
     final gap = entry['gapFeet'];
     final fault = entry['fault'] == true;
-    final faultReason = (entry['faultReason'] ?? '').toString();
+    final faultReason = (entry['faultLabelSnapshot'] ?? entry['faultReason'] ?? '').toString();
+    final faultOther = (entry['faultOtherText'] ?? '').toString();
 
     final details = <String>[
       if (dogTime is num) 'Dog ${dogTime.toStringAsFixed(3)}s',
@@ -263,7 +264,7 @@ class _EntryRow extends StatelessWidget {
                   Text(
                     faultReason.isEmpty
                         ? 'FAULT'
-                        : 'FAULT · $faultReason',
+                        : 'FAULT · $faultReason${faultOther.isEmpty ? '' : ' — $faultOther'}',
                     style: const TextStyle(
                       color: Colors.redAccent,
                       fontWeight: FontWeight.w800,

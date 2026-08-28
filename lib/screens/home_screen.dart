@@ -4,6 +4,8 @@ import '../models/app_profile.dart';
 import '../services/app_repository.dart';
 import '../theme/app_theme.dart';
 import 'club/club_screen.dart';
+import 'admin/admin_screen.dart';
+import 'reports/reports_screen.dart';
 import 'competition/competition_setup_screen.dart';
 import 'competition/competition_days_screen.dart';
 import 'competition/history_screen.dart';
@@ -107,6 +109,14 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           _Tile(
+            icon: Icons.analytics_outlined,
+            title: 'Reports & performance',
+            subtitle: 'KPIs, trends, lane analysis and sponsor reports',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => ReportsScreen(profile: profile)),
+            ),
+          ),
+          _Tile(
             icon: Icons.history,
             title: 'All race history',
             subtitle: 'Every saved race and leg',
@@ -116,6 +126,15 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ),
+          if (profile.role == 'owner' || profile.role == 'admin')
+            _Tile(
+              icon: Icons.admin_panel_settings_outlined,
+              title: 'Club Admin',
+              subtitle: 'Members, teams, fault types and deleted competitions',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => AdminScreen(profile: profile)),
+              ),
+            ),
           _Tile(
             icon: Icons.groups_outlined,
             title: 'Club',
@@ -129,9 +148,9 @@ class HomeScreen extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.all(16),
               child: Text(
-                'REV 0.5.4 LIVE MULTI-DEVICE BETA\n\n'
-                'Live Ring is now ready for multi-device beta testing alongside '
-                'the existing dogs, competitions and records.',
+                'REV 0.6 PERFORMANCE · ACCESSIBILITY · DISPLAY BETA\n\n'
+                'Adds accessible haptics, portrait/landscape display control, '
+                'Camera Beta, dynamic faults, competition bin, teams and real KPI reporting.',
                 style: TextStyle(color: AppTheme.textMuted, height: 1.4),
               ),
             ),

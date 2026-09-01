@@ -94,6 +94,22 @@ service cloud.firestore {
 
       match /competitionDays/{competitionId} {
         allow read, write: if isClubMember(clubId);
+
+        match /raceControl/{docId} {
+          allow read, write: if isClubMember(clubId);
+        }
+        match /raceControlRings/{ringId} {
+          allow read, write: if isClubMember(clubId);
+        }
+        match /raceControlPeople/{personId} {
+          allow read, write: if isClubMember(clubId);
+        }
+        match /raceControlRaces/{raceId} {
+          allow read, write: if isClubMember(clubId);
+        }
+        match /raceControlDuties/{dutyId} {
+          allow read, write: if isClubMember(clubId);
+        }
       }
 
       match /competitionSessions/{sessionId} {

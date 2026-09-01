@@ -149,8 +149,9 @@ class HomeScreen extends StatelessWidget {
               padding: EdgeInsets.all(16),
               child: Text(
                 'REV 0.6 PERFORMANCE · ACCESSIBILITY · DISPLAY BETA\n\n'
-                'Adds accessible haptics, portrait/landscape display control, '
-                'Camera Beta, dynamic faults, competition bin, teams and real KPI reporting.',
+                'Adds Race Control, multi-ring crew and duty clash warnings, '
+                'FlyballGeek-ready API settings, card-machine time entry, accessible haptics, '
+                'portrait/landscape display control, Camera Beta and KPI reporting.',
                 style: TextStyle(color: AppTheme.textMuted, height: 1.4),
               ),
             ),

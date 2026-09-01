@@ -8,6 +8,7 @@ import '../../models/dog_record.dart';
 import '../../models/fault_type.dart';
 import '../../services/app_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/card_machine_time_field.dart';
 
 class CompetitionLegScreen extends StatefulWidget {
   final AppProfile profile;
@@ -484,14 +485,10 @@ class _EntryCardState extends State<_EntryCard> {
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: time,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Dog time',
-                      hintText: '4.123',
-                      suffixText: 's',
-                    ),
+                  child: CardMachineTimeField(
+                    label: 'Dog time',
+                    initialValue: e.dogTime,
+                    decimalPlaces: 2,
                     onChanged: (v) {
                       e.dogTime = v;
                       widget.onChanged();
@@ -501,14 +498,11 @@ class _EntryCardState extends State<_EntryCard> {
                 if (widget.isFirstOriginal) ...[
                   const SizedBox(width: 8),
                   Expanded(
-                    child: TextField(
-                      controller: start,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Start time',
-                        hintText: '+0.042',
-                        suffixText: 's',
-                      ),
+                    child: CardMachineTimeField(
+                      label: 'Start time',
+                      initialValue: e.startTime,
+                      allowNegative: true,
+                      decimalPlaces: 2,
                       onChanged: (v) {
                         e.startTime = v;
                         widget.onChanged();

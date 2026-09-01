@@ -6,6 +6,7 @@ import '../../services/app_repository.dart';
 import '../../theme/app_theme.dart';
 import 'competition_setup_screen.dart';
 import 'race_history_detail_screen.dart';
+import 'race_control_screen.dart';
 
 class CompetitionDayDetailScreen extends StatelessWidget {
   final AppProfile profile;
@@ -203,6 +204,24 @@ class CompetitionDayDetailScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+              SizedBox(
+                height: 54,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => RaceControlScreen(
+                        profile: profile,
+                        competitionId: competitionId,
+                        competitionName: name,
+                        defaultTeamName: (competitionData['teamName'] ?? '').toString(),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.radar_rounded),
+                  label: const Text('RACE CONTROL'),
+                ),
+              ),
+              const SizedBox(height: 8),
               SizedBox(
                 height: 58,
                 child: FilledButton.icon(

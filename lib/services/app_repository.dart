@@ -783,7 +783,21 @@ class AppRepository {
       await session.reference.delete();
     }
 
-    await club.collection('competitionDays').doc(competitionId).delete();
+    final dayRef = club.collection('competitionDays').doc(competitionId);
+    for (final collectionName in const [
+      'raceControl',
+      'raceControlRings',
+      'raceControlPeople',
+      'raceControlRaces',
+      'raceControlDuties',
+    ]) {
+      final docs = await dayRef.collection(collectionName).get();
+      for (final doc in docs.docs) {
+        await doc.reference.delete();
+      }
+    }
+
+    await dayRef.delete();
   }
 
   Stream<List<TeamRecord>> teams(
